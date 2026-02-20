@@ -1,0 +1,69 @@
+{
+  "jax_results": [
+    {
+      "n_stn": 100,
+      "n_gpe": 200,
+      "n_gpi": 150,
+      "n_total": 450,
+      "jit_compile_s": 3.499887466430664,
+      "run_times_s": [
+        1.7233307361602783,
+        1.7267823219299316,
+        1.7308540344238281
+      ],
+      "median_s": 1.7267823219299316,
+      "sim_duration_ms": 600.0,
+      "n_steps": 24000
+    },
+    {
+      "n_stn": 400,
+      "n_gpe": 800,
+      "n_gpi": 600,
+      "n_total": 1800,
+      "jit_compile_s": 5.481018543243408,
+      "run_times_s": [
+        2.239647388458252,
+        2.2371697425842285,
+        2.290534019470215
+      ],
+      "median_s": 2.239647388458252,
+      "sim_duration_ms": 600.0,
+      "n_steps": 24000
+    },
+    {
+      "n_stn": 1000,
+      "n_gpe": 2000,
+      "n_gpi": 1500,
+      "n_total": 4500,
+      "jit_compile_s": 16.818058967590332,
+      "run_times_s": [
+        3.9742085933685303,
+        3.8346266746520996,
+        3.5706567764282227
+      ],
+      "median_s": 3.8346266746520996,
+      "sim_duration_ms": 600.0,
+      "n_steps": 24000
+    }
+  ],
+  "numpy_baseline": {
+    "n_total": 450,
+    "actual_steps": 4000,
+    "actual_time_s": 137.83381533622742,
+    "extrapolated_time_s": 827.0028920173645,
+    "sim_duration_ms": 100.0
+  },
+  "metadata": {
+    "date": "2026-02-20T13:16:21.819845",
+    "dt_ms": 0.025,
+    "sim_duration_ms": 600.0,
+    "n_steps": 24000,
+    "n_repeats": 3,
+    "jax_version": "0.4.26",
+    "platform": "Linux-5.10.0-37-cloud-amd64-x86_64-with-glibc2.31",
+    "python_version": "3.10.15",
+    "jax_devices": [
+      "cuda:0"
+    ]
+  }
+}

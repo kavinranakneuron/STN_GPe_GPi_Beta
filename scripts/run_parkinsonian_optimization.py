@@ -98,7 +98,7 @@ TARGETS = {
 }
 
 WEIGHTS = {
-    'rate': 1.0,
+    'rate': 5.0,
     'cv': 0.2,
     'beta': 15.0,  # VERY high weight on beta
 }
@@ -161,7 +161,9 @@ def objective(trial):
             loss += WEIGHTS['beta'] * ((TARGETS['beta_gpe'] - beta_gpe) / TARGETS['beta_gpe']) ** 2
         
         # Bonus for high beta
-        loss -= 5.0 * beta_gpe  # Direct reward
+        # Direct reward removed - using bounded target instead
+        if beta_gpe > 0.40:
+            loss += 10.0 * ((beta_gpe - 0.40) / 0.40) ** 2
         
         # PD constraints
         if r_gpe > 55.0:
