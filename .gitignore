@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 *.pyo
+results/simulations/traces_1800n.pkl
+*.pkl
