@@ -12,6 +12,7 @@ Date: December 2025
 import jax
 import jax.numpy as jnp
 import numpy as np
+from scipy.signal import welch as scipy_welch
 from typing import Dict
 
 
@@ -140,43 +141,32 @@ def compute_cv_all_populations(spikes_dict: Dict[str, jnp.ndarray], dt_ms: float
 
 def compute_beta_power_single_pop(V_trace: jnp.ndarray, dt_ms: float, burn_steps: int, freq_range: tuple = (13, 30)) -> float:
     """
-    Compute power in beta band (13-30 Hz) using FFT.
-    
+    Compute power in beta band (13-30 Hz) using Welch's method.
+
     Args:
         V_trace: Voltage traces (n_steps, n_neurons)
         dt_ms: Timestep
         burn_steps: Burn-in steps
         freq_range: (low, high) frequency range in Hz
-        
+
     Returns:
-        Total power in beta band
-        
-    Note: Not JIT-compiled due to dynamic burn_steps.
-    FFT operations are still fast.
+        Total power in beta band (V^2/Hz, integrated over band)
     """
-    # Simple slicing when not in JIT
     valid_V = V_trace[burn_steps:]
-    
-    # LFP proxy: mean across neurons
-    lfp = jnp.mean(valid_V, axis=1)
-    
-    # FFT (vectorized, fast)
-    fft_vals = jnp.fft.rfft(lfp)
-    freqs = jnp.fft.rfftfreq(len(lfp), d=dt_ms / 1000.0)
-    
-    # Power spectral density
-    psd = jnp.abs(fft_vals) ** 2
-    
-    # Extract beta band
+    lfp = np.array(jnp.mean(valid_V, axis=1))
+
+    fs = 1000.0 / dt_ms  # Sampling frequency in Hz
+    nperseg = min(len(lfp), 8192)  # ~4.9 Hz resolution at 40 kHz
+
+    freqs, psd = scipy_welch(lfp, fs=fs, nperseg=nperseg)
+
     low_freq, high_freq = freq_range
     idx = (freqs >= low_freq) & (freqs <= high_freq)
-    
-    beta_power = jnp.sum(psd[idx])
-    
-    # Handle NaN/Inf
-    if jnp.isnan(beta_power) or jnp.isinf(beta_power):
+    beta_power = np.sum(psd[idx])
+
+    if np.isnan(beta_power) or np.isinf(beta_power):
         return 0.0
-    
+
     return float(beta_power)
 
 
@@ -251,112 +241,57 @@ def compute_all_metrics(observables: Dict[str, jnp.ndarray], dt_ms: float, burn_
 
 
 # ============================================================================
-# EXAMPLE USAGE
+# BETA FRACTION (normalized, 0-1)
 # ============================================================================
 
-if __name__ == "__main__":
-    """Test metrics computation."""
-    import numpy as np
-    
-    print("=" * 70)
-    print("Testing metrics_jax.py")
-    print("=" * 70)
-    
-    # Create fake data
-    n_steps = 2000
-    n_neurons = 50
-    dt_ms = 0.025
-    
-    # Fake spikes (random)
-    rng = np.random.default_rng(42)
-    fake_spikes = rng.random((n_steps, n_neurons)) < 0.02  # ~20 Hz
-    fake_V = rng.normal(-60, 5, (n_steps, n_neurons))
-    
-    observables = {
-        'spikes_stn': jnp.array(fake_spikes),
-        'spikes_gpe': jnp.array(fake_spikes),
-        'spikes_gpi': jnp.array(fake_spikes),
-        'V_stn': jnp.array(fake_V),
-        'V_gpe': jnp.array(fake_V),
-        'V_gpi': jnp.array(fake_V)
-    }
-    
-    # Compute metrics
-    import time
-    t0 = time.time()
-    metrics = compute_all_metrics(observables, dt_ms, burn_steps=200)
-    t1 = time.time()
-    
-    print(f"\nMetrics computation time: {(t1-t0)*1000:.2f} ms")
-    print(f"\nFiring rates: {metrics['firing_rates']}")
-    print(f"CV: {metrics['cv']}")
-    print(f"Beta power: {metrics['beta_power']}")
-    print(f"Mean voltages: {metrics['mean_V']}")
-    
-    print("\n" + "=" * 70)
-    print("✓ Metrics computation works!")
-    print("=" * 70)
-
-
-def compute_beta_fraction_single_pop(V_trace: jnp.ndarray, dt_ms: float, burn_steps: int, 
-                                      beta_range: tuple = (13, 30), 
+def compute_beta_fraction_single_pop(V_trace: jnp.ndarray, dt_ms: float, burn_steps: int,
+                                      beta_range: tuple = (13, 30),
                                       total_range: tuple = (1, 100)) -> float:
     """
-    Compute beta FRACTION = power_in_beta_band / total_power.
-    
+    Compute beta FRACTION = power_in_beta_band / total_power using Welch's method.
+
     This is normalized (0-1) and scale-invariant.
-    
+
     Args:
         V_trace: Voltage traces (n_steps, n_neurons)
         dt_ms: Timestep in ms
         burn_steps: Burn-in steps to discard
         beta_range: (13, 30) Hz - beta band
         total_range: (1, 100) Hz - total range for normalization
-        
+
     Returns:
         Beta fraction (0-1), where 0.25 = 25% of power in beta
     """
-    # Remove burn-in
     valid_V = V_trace[burn_steps:]
-    
-    # LFP proxy: mean across neurons
-    lfp = jnp.mean(valid_V, axis=1)
-    
-    # Remove DC offset
-    lfp = lfp - jnp.mean(lfp)
-    
-    # FFT
-    fft_vals = jnp.fft.rfft(lfp)
-    freqs = jnp.fft.rfftfreq(len(lfp), d=dt_ms / 1000.0)
-    
-    # Power spectral density
-    psd = jnp.abs(fft_vals) ** 2
-    
-    # Beta band power
+    lfp = np.array(jnp.mean(valid_V, axis=1))
+    lfp = lfp - np.mean(lfp)  # Remove DC offset
+
+    fs = 1000.0 / dt_ms
+    nperseg = min(len(lfp), 8192)
+
+    freqs, psd = scipy_welch(lfp, fs=fs, nperseg=nperseg)
+
     beta_idx = (freqs >= beta_range[0]) & (freqs <= beta_range[1])
-    beta_power = jnp.sum(psd[beta_idx])
-    
-    # Total power in range
+    beta_power = np.sum(psd[beta_idx])
+
     total_idx = (freqs >= total_range[0]) & (freqs <= total_range[1])
-    total_power = jnp.sum(psd[total_idx])
-    
-    # Fraction
+    total_power = np.sum(psd[total_idx])
+
     if total_power > 0:
         beta_fraction = beta_power / total_power
     else:
         beta_fraction = 0.0
-    
-    # Handle NaN/Inf
-    if jnp.isnan(beta_fraction) or jnp.isinf(beta_fraction):
+
+    if np.isnan(beta_fraction) or np.isinf(beta_fraction):
         return 0.0
-    
+
     return float(beta_fraction)
 
 
 def compute_beta_fraction_all(V_dict, dt_ms: float, burn_steps: int = 1000):
     """
     Compute beta fraction for all populations.
-    
+
     Returns:
         Dict with beta fractions (0-1) for each population
     """
@@ -365,3 +300,49 @@ def compute_beta_fraction_all(V_dict, dt_ms: float, burn_steps: int = 1000):
         'gpe': compute_beta_fraction_single_pop(V_dict['V_gpe'], dt_ms, burn_steps),
         'gpi': compute_beta_fraction_single_pop(V_dict['V_gpi'], dt_ms, burn_steps),
     }
+
+
+# ============================================================================
+# EXAMPLE USAGE
+# ============================================================================
+
+if __name__ == "__main__":
+    """Test metrics computation."""
+    print("=" * 70)
+    print("Testing metrics_jax.py (Welch's method)")
+    print("=" * 70)
+
+    n_steps = 2000
+    n_neurons = 50
+    dt_ms = 0.025
+
+    rng = np.random.default_rng(42)
+    fake_spikes = rng.random((n_steps, n_neurons)) < 0.02
+    fake_V = rng.normal(-60, 5, (n_steps, n_neurons))
+
+    observables = {
+        'spikes_stn': jnp.array(fake_spikes),
+        'spikes_gpe': jnp.array(fake_spikes),
+        'spikes_gpi': jnp.array(fake_spikes),
+        'V_stn': jnp.array(fake_V),
+        'V_gpe': jnp.array(fake_V),
+        'V_gpi': jnp.array(fake_V)
+    }
+
+    import time
+    t0 = time.time()
+    metrics = compute_all_metrics(observables, dt_ms, burn_steps=200)
+    t1 = time.time()
+
+    print(f"\nMetrics computation time: {(t1-t0)*1000:.2f} ms")
+    print(f"\nFiring rates: {metrics['firing_rates']}")
+    print(f"CV: {metrics['cv']}")
+    print(f"Beta power: {metrics['beta_power']}")
+    print(f"Mean voltages: {metrics['mean_V']}")
+
+    beta_frac = compute_beta_fraction_all(observables, dt_ms, burn_steps=200)
+    print(f"Beta fractions: {beta_frac}")
+
+    print("\n" + "=" * 70)
+    print("Metrics computation works!")
+    print("=" * 70)
