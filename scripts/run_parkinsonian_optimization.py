@@ -30,7 +30,7 @@ N_STEPS = 16000  # 400ms
 BURN_STEPS = 4000
 
 print(f"\nBuilding {N_STN + N_GPE + N_GPI}-neuron HH network...")
-base_state, base_config = build_network_state(N_STN, N_GPE, N_GPI, DT_MS, use_hh=True)
+base_state, base_config = build_network_state(N_STN, N_GPE, N_GPI, DT_MS)
 
 # =============================================================================
 # CUSTOM SIMULATOR WITH SYNAPTIC SCALING
@@ -244,7 +244,7 @@ if __name__ == "__main__":
         'elapsed_seconds': elapsed,
     }
     
-    with open('results/hh_parkinsonian_beta_study.pkl', 'wb') as f:
+    with open('results/optimization/parkinsonian_study.pkl', 'wb') as f:
         pickle.dump(results, f)
     
-    print(f"\nResults saved to results/hh_parkinsonian_beta_study.pkl")
+    print(f"\nResults saved to results/optimization/parkinsonian_study.pkl")

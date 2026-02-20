@@ -24,7 +24,7 @@ print(f"JAX devices: {jax.devices()}")
 # =============================================================================
 
 print("Building 1800-neuron network...")
-state, config = build_network_state(400, 800, 600, 0.025, use_hh=True)
+state, config = build_network_state(400, 800, 600, 0.025)
 
 simulator = create_simulation_fn(config, n_steps=24000)
 
@@ -159,8 +159,8 @@ for col, (pop, label, color, n_n) in enumerate(zip(populations, pop_labels, pop_
         axes[1, col].set_ylabel('Neuron #', fontsize=10)
 
 plt.tight_layout()
-plt.savefig('results/fig1_raster_plots.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig1_raster_plots.pdf', bbox_inches='tight')
+plt.savefig('results/figures/fig1_raster_plots.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig1_raster_plots.pdf', bbox_inches='tight')
 print("  Saved: fig1_raster_plots.png/pdf")
 
 # =============================================================================
@@ -186,8 +186,8 @@ for col, (pop, label, color) in enumerate(zip(populations, pop_labels, pop_color
     axes[col].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('results/fig2_power_spectra.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig2_power_spectra.pdf', bbox_inches='tight')
+plt.savefig('results/figures/fig2_power_spectra.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig2_power_spectra.pdf', bbox_inches='tight')
 print("  Saved: fig2_power_spectra.png/pdf")
 
 # =============================================================================
@@ -233,8 +233,8 @@ for bar, val in zip(bars4, beta_vals_pd):
     axes[1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3, f'{val:.1f}%', ha='center', va='bottom', fontsize=9)
 
 plt.tight_layout()
-plt.savefig('results/fig3_firing_rates_beta.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig3_firing_rates_beta.pdf', bbox_inches='tight')
+plt.savefig('results/figures/fig3_firing_rates_beta.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig3_firing_rates_beta.pdf', bbox_inches='tight')
 print("  Saved: fig3_firing_rates_beta.png/pdf")
 
 # =============================================================================
@@ -303,8 +303,8 @@ axes[1].annotate('82% reduction\n(KEY for beta)', xy=(-0.5, 0.6), fontsize=10,
                  bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8))
 
 plt.tight_layout()
-plt.savefig('results/fig4_network_schematic.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig4_network_schematic.pdf', bbox_inches='tight')
+plt.savefig('results/figures/fig4_network_schematic.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig4_network_schematic.pdf', bbox_inches='tight')
 print("  Saved: fig4_network_schematic.png/pdf")
 
 # =============================================================================
@@ -332,8 +332,8 @@ axes[1].set_title(f'Parkinsonian - Beta: {beta_pd["gpe"]*100:.1f}%', fontsize=11
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('results/fig5_lfp_traces.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig5_lfp_traces.pdf', bbox_inches='tight')
+plt.savefig('results/figures/fig5_lfp_traces.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig5_lfp_traces.pdf', bbox_inches='tight')
 print("  Saved: fig5_lfp_traces.png/pdf")
 
 # =============================================================================
@@ -343,7 +343,7 @@ print("  Saved: fig5_lfp_traces.png/pdf")
 print("\n" + "="*60)
 print("FIGURE GENERATION COMPLETE")
 print("="*60)
-print("Generated figures in results/ folder:")
+print("Generated figures in results/figures/ folder:")
 print("  1. fig1_raster_plots.png/pdf")
 print("  2. fig2_power_spectra.png/pdf")
 print("  3. fig3_firing_rates_beta.png/pdf")

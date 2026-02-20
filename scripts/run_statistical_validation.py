@@ -95,7 +95,7 @@ for seed in range(N_SEEDS):
     print(f"\nSeed {seed+1}/{N_SEEDS}...")
     
     # Build network with different seed
-    state, config = build_network_state(400, 800, 600, 0.025, use_hh=True, seed=seed)
+    state, config = build_network_state(400, 800, 600, 0.025, seed=seed)
     
     # Create simulators
     simulator = create_simulation_fn(config, n_steps=N_STEPS)
@@ -266,17 +266,17 @@ axes[2].legend()
 axes[2].set_title('C. Beta Band Power (13-30 Hz)', fontweight='bold')
 
 plt.tight_layout()
-plt.savefig('results/fig6_statistical_validation.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig6_statistical_validation.pdf', bbox_inches='tight')
-print("\nSaved: results/fig6_statistical_validation.png/pdf")
+plt.savefig('results/figures/fig6_statistical_validation.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig6_statistical_validation.pdf', bbox_inches='tight')
+print("\nSaved: results/figures/fig6_statistical_validation.png/pdf")
 
 # =============================================================================
 # SAVE RESULTS
 # =============================================================================
 
 import pickle
-with open('results/statistical_validation.pkl', 'wb') as f:
+with open('results/validation/statistical_validation.pkl', 'wb') as f:
     pickle.dump(results, f)
-print("Saved: results/statistical_validation.pkl")
+print("Saved: results/validation/statistical_validation.pkl")
 
 print("\n✓ Statistical validation complete!")

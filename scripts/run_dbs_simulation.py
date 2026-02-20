@@ -35,7 +35,7 @@ DBS_PULSE_WIDTH = 0.1 # ms
 # =============================================================================
 
 print("Building 1800-neuron network...")
-state, config = build_network_state(400, 800, 600, 0.025, use_hh=True, seed=42)
+state, config = build_network_state(400, 800, 600, 0.025, seed=42)
 
 # PD parameters
 pd_params = {
@@ -330,8 +330,8 @@ axes[1, 2].text(0.1, 0.9, summary_text, transform=axes[1, 2].transAxes,
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
 plt.tight_layout()
-plt.savefig('results/fig7_dbs_effect.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/fig7_dbs_effect.pdf', bbox_inches='tight')
-print("\nSaved: results/fig7_dbs_effect.png/pdf")
+plt.savefig('results/figures/fig7_dbs_effect.png', dpi=300, bbox_inches='tight')
+plt.savefig('results/figures/fig7_dbs_effect.pdf', bbox_inches='tight')
+print("\nSaved: results/figures/fig7_dbs_effect.png/pdf")
 
 print("\n✓ DBS simulation complete!")

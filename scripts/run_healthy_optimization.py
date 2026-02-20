@@ -29,7 +29,7 @@ N_STEPS = 16000  # 400ms
 BURN_STEPS = 4000  # 100ms burn-in
 
 print(f"\nBuilding {N_STN + N_GPE + N_GPI}-neuron HH network...")
-state, config = build_network_state(N_STN, N_GPE, N_GPI, DT_MS, use_hh=True)
+state, config = build_network_state(N_STN, N_GPE, N_GPI, DT_MS)
 simulator = create_simulation_fn(config, n_steps=N_STEPS)
 
 # Warm-up JIT
@@ -179,7 +179,7 @@ if __name__ == "__main__":
         'elapsed_seconds': elapsed,
     }
     
-    with open('results/hh_healthy_study.pkl', 'wb') as f:
+    with open('results/optimization/healthy_study.pkl', 'wb') as f:
         pickle.dump(results, f)
     
-    print(f"\nResults saved to results/hh_healthy_study.pkl")
+    print(f"\nResults saved to results/optimization/healthy_study.pkl")
