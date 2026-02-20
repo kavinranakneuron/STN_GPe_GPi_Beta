@@ -1,6 +1,6 @@
 """
 Network integrator - steps all populations and synapses.
-Supports both AdEx and Rubin-Terman HH neurons.
+Uses Rubin-Terman HH neurons for GPe/GPi, Gillies-Willshaw HH for STN.
 """
 
 import jax.numpy as jnp
@@ -14,12 +14,10 @@ def network_step(state: Dict, config: Dict, t_ms: float) -> Tuple[Dict, Dict]:
     Single network timestep.
     """
     dt = config['dt_ms']
-    use_hh = config.get('use_hh', False)
-    
-    # Synaptic current scale factor: AdEx uses pA, HH uses μA/cm²
-    # HH currents are ~100-300x smaller in magnitude
-    syn_scale = 0.005 if use_hh else 1.0  # Scale down for HH
-    noise_scale = 0.01 if use_hh else 1.0  # Scale down noise for HH too
+
+    # Scale factors for HH units (μA/cm²)
+    syn_scale = 0.005
+    noise_scale = 0.01
     
     # Get step functions
     stn_step = config['neuron_step_fns']['stn']
@@ -102,73 +100,44 @@ def network_step(state: Dict, config: Dict, t_ms: float) -> Tuple[Dict, Dict]:
     )
     
     # =========================================================================
-    # STEP GPe - Check if using HH or AdEx
+    # STEP GPe (Rubin-Terman HH)
     # =========================================================================
-    
-    if 'Ca' in state['gpe']:
-        # Rubin-Terman HH model
-        V_gpe, h_gpe, n_gpe, r_gpe, Ca_gpe, spikes_gpe = gpe_step(
-            state['gpe']['V'],
-            state['gpe']['h'],
-            state['gpe']['n'],
-            state['gpe']['r'],
-            state['gpe']['Ca'],
-            I_syn_gpe,
-            I_noise_gpe,
-            dt,
-            gpe_params
-        )
-        new_gpe_state = {
-            'V': V_gpe, 'h': h_gpe, 'n': n_gpe, 'r': r_gpe, 'Ca': Ca_gpe,
-            'refractory': state['gpe']['refractory']
-        }
-    else:
-        # AdEx model
-        V_gpe, w_gpe, ref_gpe, spikes_gpe = gpe_step(
-            state['gpe']['V'],
-            state['gpe']['w'],
-            state['gpe']['refractory'],
-            I_syn_gpe_raw,  # Use raw (unscaled) for AdEx
-            I_noise_gpe_raw,
-            dt,
-            gpe_params
-        )
-        new_gpe_state = {'V': V_gpe, 'w': w_gpe, 'refractory': ref_gpe}
-    
+
+    V_gpe, h_gpe, n_gpe, r_gpe, Ca_gpe, spikes_gpe = gpe_step(
+        state['gpe']['V'],
+        state['gpe']['h'],
+        state['gpe']['n'],
+        state['gpe']['r'],
+        state['gpe']['Ca'],
+        I_syn_gpe,
+        I_noise_gpe,
+        dt,
+        gpe_params
+    )
+    new_gpe_state = {
+        'V': V_gpe, 'h': h_gpe, 'n': n_gpe, 'r': r_gpe, 'Ca': Ca_gpe,
+        'refractory': state['gpe']['refractory']
+    }
+
     # =========================================================================
-    # STEP GPi - Check if using HH or AdEx
+    # STEP GPi (Rubin-Terman HH)
     # =========================================================================
-    
-    if 'Ca' in state['gpi']:
-        # Rubin-Terman HH model
-        V_gpi, h_gpi, n_gpi, r_gpi, Ca_gpi, spikes_gpi = gpi_step(
-            state['gpi']['V'],
-            state['gpi']['h'],
-            state['gpi']['n'],
-            state['gpi']['r'],
-            state['gpi']['Ca'],
-            I_syn_gpi,
-            I_noise_gpi,
-            dt,
-            gpi_params
-        )
-        new_gpi_state = {
-            'V': V_gpi, 'h': h_gpi, 'n': n_gpi, 'r': r_gpi, 'Ca': Ca_gpi,
-            'refractory': state['gpi']['refractory']
-        }
-    else:
-        # AdEx model
-        I_syn_gpi_raw = I_syn_gpi_from_stn_raw + I_syn_gpi_from_gpe_raw
-        V_gpi, w_gpi, ref_gpi, spikes_gpi = gpi_step(
-            state['gpi']['V'],
-            state['gpi']['w'],
-            state['gpi']['refractory'],
-            I_syn_gpi_raw,  # Use raw for AdEx
-            I_noise_gpi_raw,
-            dt,
-            gpi_params
-        )
-        new_gpi_state = {'V': V_gpi, 'w': w_gpi, 'refractory': ref_gpi}
+
+    V_gpi, h_gpi, n_gpi, r_gpi, Ca_gpi, spikes_gpi = gpi_step(
+        state['gpi']['V'],
+        state['gpi']['h'],
+        state['gpi']['n'],
+        state['gpi']['r'],
+        state['gpi']['Ca'],
+        I_syn_gpi,
+        I_noise_gpi,
+        dt,
+        gpi_params
+    )
+    new_gpi_state = {
+        'V': V_gpi, 'h': h_gpi, 'n': n_gpi, 'r': r_gpi, 'Ca': Ca_gpi,
+        'refractory': state['gpi']['refractory']
+    }
     
     # =========================================================================
     # ASSEMBLE NEW STATE

@@ -16,43 +16,30 @@ REF_N_GPE = 20
 REF_N_GPI = 15
 
 
-def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42, use_hh=True):
+def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
     """
     Build network with automatic synaptic scaling.
-    
+
     Args:
         n_stn: Number of STN neurons
         n_gpe: Number of GPe neurons
         n_gpi: Number of GPi neurons
         dt_ms: Timestep in ms
         seed: Random seed
-        use_hh: If True, use Rubin-Terman HH for GPe/GPi. If False, use AdEx.
-    
+
     Synaptic weights are scaled inversely with the number of presynaptic
-    neurons to maintain consistent total synaptic drive regardless of 
+    neurons to maintain consistent total synaptic drive regardless of
     network size.
     """
-    
-    # Neurons - STN always uses HH
+
+    # Neurons
     stn_state = create_stn_population(n_stn, heterogeneity=0.05, seed=seed)
-    
-    # GPe/GPi - HH or AdEx
-    if use_hh:
-        gpe_state = create_hh_population(n_gpe, cell_type='gpe', heterogeneity=0.1, seed=seed+1)
-        gpi_state = create_hh_population(n_gpi, cell_type='gpi', heterogeneity=0.1, seed=seed+2)
-        gpe_step_fn = create_vectorized_gpe_gpi(compile=True)
-        gpi_step_fn = create_vectorized_gpe_gpi(compile=True)
-        gpe_params = default_gpe_params()
-        gpi_params = default_gpi_params()
-    else:
-        from .adex_jax import create_population_state as create_adex_population
-        from .adex_jax import create_vectorized_adex, default_adex_params_gpe, default_adex_params_gpi
-        gpe_state = create_adex_population(n_gpe, cell_type='gpe', heterogeneity=0.1, seed=seed+1)
-        gpi_state = create_adex_population(n_gpi, cell_type='gpi', heterogeneity=0.1, seed=seed+2)
-        gpe_step_fn = create_vectorized_adex(compile=True)
-        gpi_step_fn = create_vectorized_adex(compile=True)
-        gpe_params = default_adex_params_gpe()
-        gpi_params = default_adex_params_gpi()
+    gpe_state = create_hh_population(n_gpe, cell_type='gpe', heterogeneity=0.1, seed=seed+1)
+    gpi_state = create_hh_population(n_gpi, cell_type='gpi', heterogeneity=0.1, seed=seed+2)
+    gpe_step_fn = create_vectorized_gpe_gpi(compile=True)
+    gpi_step_fn = create_vectorized_gpe_gpi(compile=True)
+    gpe_params = default_gpe_params()
+    gpi_params = default_gpi_params()
     
     # ==========================================================================
     # SYNAPTIC SCALING
@@ -130,13 +117,6 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42, use_hh=True):
             'gpe': gpe_params,
             'gpi': gpi_params
         },
-        'use_hh': use_hh
     }
-    
+
     return state, config
-
-
-# Backward compatibility
-def build_network_state_adex(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
-    """Build network with AdEx GPe/GPi (original behavior)."""
-    return build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed, use_hh=False)

@@ -33,11 +33,9 @@ def apply_params_to_config(trial_params: Dict[str, float], base_config: Dict) ->
     gpe_p = dict(config['neuron_params']['gpe'])
     gpe_p['I_baseline'] = trial_params['I_gpe']
     gpe_p['I_app'] = trial_params['I_gpe']
-    gpe_p['I_app'] = trial_params['I_gpe']
-    
+
     gpi_p = dict(config['neuron_params']['gpi'])
     gpi_p['I_baseline'] = trial_params['I_gpi']
-    gpi_p['I_app'] = trial_params['I_gpi']
     gpi_p['I_app'] = trial_params['I_gpi']
     
     config['neuron_params'] = {
@@ -60,38 +58,6 @@ def apply_params_to_config(trial_params: Dict[str, float], base_config: Dict) ->
     }
     
     return config
-
-
-def run_simulation_python_loop(
-    trial_params: Dict[str, float],
-    base_state: Dict,
-    base_config: Dict,
-    n_steps: int = 4000
-) -> Dict:
-    """
-    Run simulation with Python loop (baseline, not optimized).
-    
-    Returns:
-        observables: Dict of arrays with shape (n_steps, n_neurons)
-    """
-    config = apply_params_to_config(trial_params, base_config)
-    state = base_state  # No copy needed - functional updates
-    
-    # Collect observables
-    history = {
-        'V_stn': [], 'V_gpe': [], 'V_gpi': [],
-        'spikes_stn': [], 'spikes_gpe': [], 'spikes_gpi': []
-    }
-    
-    for i in range(n_steps):
-        t_ms = i * config['dt_ms']
-        state, obs = network_step(state, config, t_ms)
-        
-        for key in history.keys():
-            history[key].append(obs[key])
-    
-    # Stack into (n_steps, n_neurons) arrays
-    return {k: jnp.stack(v) for k, v in history.items()}
 
 
 def create_simulation_fn(base_config: Dict, n_steps: int = 4000):
