@@ -1,5 +1,10 @@
 # build_network.py
 # Build the STN/GPe/GPi network: populations, connectivity, synapses, delays, and background drive.
+#
+# NOTE: This NumPy reference implementation uses fixed connection probability (sample_connectivity)
+# with dense weight matrices. The JAX production code (jax_models/network_builder.py) uses fixed
+# indegree connectivity instead, which preserves both mean AND variance of synaptic input across
+# network sizes. See Gerstner et al., Neuronal Dynamics, Ch 12.3.
 
 from __future__ import annotations
 

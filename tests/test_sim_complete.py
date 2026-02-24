@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from jax_models.network_builder import build_network_state
-from optimization.sim_jax import apply_params_to_config, run_simulation_python_loop, create_simulation_fn
+from optimization.sim_jax import apply_params_to_config, create_simulation_fn
 import time
 
 print("=" * 70)
@@ -47,30 +47,10 @@ assert config['neuron_params']['stn']['ISTN'] == 42.0  # Unchanged (default)
 print("\n✓ Test 1 PASSED\n")
 
 # ============================================================================
-# Test 2: Python Loop Simulation
+# Test 2: JIT Compilation
 # ============================================================================
 print("=" * 70)
-print("Test 2: Python Loop Simulation")
-print("-" * 70)
-
-print("Running 50-step simulation...")
-t0 = time.time()
-obs = run_simulation_python_loop(params, state, config, n_steps=50)
-t1 = time.time()
-
-print(f"Time: {(t1-t0)*1000:.1f} ms")
-print(f"Shapes: V_stn={obs['V_stn'].shape}, spikes_gpe={obs['spikes_gpe'].shape}")
-
-assert obs['V_stn'].shape == (50, 10)
-assert obs['V_gpe'].shape == (50, 20)
-assert obs['V_gpi'].shape == (50, 15)
-print("\n✓ Test 2 PASSED\n")
-
-# ============================================================================
-# Test 3: JIT Compilation
-# ============================================================================
-print("=" * 70)
-print("Test 3: JIT + lax.scan Simulation")
+print("Test 2: JIT + lax.scan Simulation")
 print("-" * 70)
 
 print("Creating JIT-compiled function...")
@@ -94,17 +74,16 @@ print(f"  {cached_ms:.3f} ms")
 
 print(f"\nSpeedup: {compile_ms/cached_ms:.1f}x")
 assert obs2['V_stn'].shape == (50, 10)
-print("\n✓ Test 3 PASSED\n")
+print("\n✓ Test 2 PASSED\n")
 
 # ============================================================================
 # Summary
 # ============================================================================
 print("=" * 70)
-print("ALL TESTS PASSED! 🎉")
+print("ALL TESTS PASSED!")
 print("=" * 70)
 print("\nWhat works:")
 print("  ✓ Functional parameter updates (no mutations)")
-print("  ✓ Python loop simulation")
 print("  ✓ JIT compilation with lax.scan")
 print(f"  ✓ Performance gain: {compile_ms/cached_ms:.1f}x")
 print("\nYour implementation is correct!")

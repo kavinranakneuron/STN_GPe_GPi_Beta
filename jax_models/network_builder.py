@@ -1,5 +1,20 @@
 """
-Network builder with HH GPe/GPi neurons and proper synaptic scaling.
+Network builder with fixed-indegree connectivity.
+
+Uses fixed indegree (constant number of presynaptic inputs per postsynaptic
+neuron) instead of fixed connection probability. This preserves both mean
+AND variance of synaptic input across network sizes, following the approach
+described in Gerstner et al., Neuronal Dynamics, Ch 12.3.
+
+The indegrees are calibrated to match the connectivity at the 450-neuron
+optimization size (100 STN / 200 GPe / 150 GPi):
+  STN->GPe: K=15  (was p=0.15 * 100 STN = 15)
+  GPe->STN: K=14  (was p=0.07 * 200 GPe = 14)
+  STN->GPi: K=30  (was p=0.30 * 100 STN = 30)
+  GPe->GPi: K=10  (was p=0.05 * 200 GPe = 10)
+
+No conductance scaling is needed — g_max values are used directly at all
+network sizes because each neuron always receives the same number of inputs.
 """
 
 import jax.numpy as jnp
@@ -10,15 +25,23 @@ from .noise_jax import create_ou_for_population
 from .synapses_jax import create_synapse_config, init_synapse_state
 
 
-# Reference network size (where g_max values were tuned)
-REF_N_STN = 10
-REF_N_GPE = 20
-REF_N_GPI = 15
+# Fixed indegrees (number of presynaptic inputs per postsynaptic neuron).
+# These are constant regardless of network size.
+K_STN_GPE = 15   # Each GPe neuron receives 15 STN inputs
+K_GPE_STN = 14   # Each STN neuron receives 14 GPe inputs
+K_STN_GPI = 30   # Each GPi neuron receives 30 STN inputs
+K_GPE_GPI = 10   # Each GPi neuron receives 10 GPe inputs
+
+# Reference conductances (tuned at 450-neuron scale, used directly at all sizes)
+G_STN_GPE = 2.0
+G_GPE_STN = 9.0
+G_STN_GPI = 2.0
+G_GPE_GPI = 3.0
 
 
 def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
     """
-    Build network with automatic synaptic scaling.
+    Build network with fixed-indegree connectivity.
 
     Args:
         n_stn: Number of STN neurons
@@ -26,10 +49,6 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
         n_gpi: Number of GPi neurons
         dt_ms: Timestep in ms
         seed: Random seed
-
-    Synaptic weights are scaled inversely with the number of presynaptic
-    neurons to maintain consistent total synaptic drive regardless of
-    network size.
     """
 
     # Neurons
@@ -40,39 +59,28 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
     gpi_step_fn = create_vectorized_gpe_gpi(compile=True)
     gpe_params = default_gpe_params()
     gpi_params = default_gpi_params()
-    
+
     # ==========================================================================
-    # SYNAPTIC SCALING
+    # SYNAPSES (fixed indegree, no conductance scaling)
     # ==========================================================================
-    
-    g_stn_gpe_ref = 2.0
-    g_gpe_stn_ref = 9.0
-    g_stn_gpi_ref = 2.0
-    g_gpe_gpi_ref = 3.0
-    
-    g_stn_gpe = g_stn_gpe_ref * (REF_N_STN / n_stn)
-    g_gpe_stn = g_gpe_stn_ref * (REF_N_GPE / n_gpe)
-    g_stn_gpi = g_stn_gpi_ref * (REF_N_STN / n_stn)
-    g_gpe_gpi = g_gpe_gpi_ref * (REF_N_GPE / n_gpe)
-    
-    # Synapses
-    syn_cfg_stn_gpe = create_synapse_config(n_stn, n_gpe, 0.15, g_stn_gpe, 0.2, 5.0, 3.0, 0.0, dt_ms, seed+10)
+
+    syn_cfg_stn_gpe = create_synapse_config(n_stn, n_gpe, K_STN_GPE, G_STN_GPE, 0.2, 5.0, 3.0, 0.0, dt_ms, seed+10)
     syn_state_stn_gpe = init_synapse_state(syn_cfg_stn_gpe)
-    
-    syn_cfg_gpe_stn = create_synapse_config(n_gpe, n_stn, 0.07, g_gpe_stn, 0.2, 8.0, 8.0, -70.0, dt_ms, seed+11)
+
+    syn_cfg_gpe_stn = create_synapse_config(n_gpe, n_stn, K_GPE_STN, G_GPE_STN, 0.2, 8.0, 8.0, -70.0, dt_ms, seed+11)
     syn_state_gpe_stn = init_synapse_state(syn_cfg_gpe_stn)
-    
-    syn_cfg_stn_gpi = create_synapse_config(n_stn, n_gpi, 0.30, g_stn_gpi, 0.2, 5.0, 3.0, 0.0, dt_ms, seed+12)
+
+    syn_cfg_stn_gpi = create_synapse_config(n_stn, n_gpi, K_STN_GPI, G_STN_GPI, 0.2, 5.0, 3.0, 0.0, dt_ms, seed+12)
     syn_state_stn_gpi = init_synapse_state(syn_cfg_stn_gpi)
-    
-    syn_cfg_gpe_gpi = create_synapse_config(n_gpe, n_gpi, 0.05, g_gpe_gpi, 0.2, 5.0, 8.0, -70.0, dt_ms, seed+13)
+
+    syn_cfg_gpe_gpi = create_synapse_config(n_gpe, n_gpi, K_GPE_GPI, G_GPE_GPI, 0.2, 5.0, 8.0, -70.0, dt_ms, seed+13)
     syn_state_gpe_gpi = init_synapse_state(syn_cfg_gpe_gpi)
-    
+
     # Noise
     noise_cfg_stn, noise_state_stn = create_ou_for_population(n_stn, dt_ms, mu=1.8, seed=seed+20)
     noise_cfg_gpe, noise_state_gpe = create_ou_for_population(n_gpe, dt_ms, mu=0.0, seed=seed+21)
     noise_cfg_gpi, noise_state_gpi = create_ou_for_population(n_gpi, dt_ms, mu=0.0, seed=seed+22)
-    
+
     state = {
         'stn': stn_state,
         'gpe': gpe_state,
@@ -92,7 +100,7 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
             'gpi': noise_state_gpi
         }
     }
-    
+
     config = {
         'dt_ms': dt_ms,
         'populations': {'n_stn': n_stn, 'n_gpe': n_gpe, 'n_gpi': n_gpi},
