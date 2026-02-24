@@ -11,6 +11,7 @@ Uses STN beta as the primary beta metric.
 import sys
 sys.path.insert(0, '.')
 
+import gc
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -19,6 +20,7 @@ import jax
 import jax.numpy as jnp
 import time
 import pickle
+from scipy.signal import welch as scipy_welch
 
 from jax_models.network_builder import build_network_state
 from optimization.sim_jax import apply_params_to_config
@@ -96,6 +98,30 @@ def create_simulator(base_config, n_steps):
 
 simulator = create_simulator(config, N_STEPS)
 
+MAX_NEURONS_PSD = 500
+
+def compute_psd(V_trace, dt_ms, burn_steps=4000, max_neurons=MAX_NEURONS_PSD):
+    """Compute PSD from voltage trace, subsampling neurons to avoid OOM."""
+    valid_V = V_trace[burn_steps:]
+    n_neurons = valid_V.shape[1]
+    if n_neurons > max_neurons:
+        rng = np.random.default_rng(0)
+        indices = rng.choice(n_neurons, size=max_neurons, replace=False)
+        indices.sort()
+        valid_V = valid_V[:, indices]
+    lfp = np.array(jnp.mean(valid_V, axis=1))
+    fs = 1000.0 / dt_ms
+    nperseg = min(len(lfp), int(fs * 0.5))
+    freqs, psd = scipy_welch(lfp, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
+    return freqs, psd
+
+def extract_psds(obs, dt_ms, burn_steps):
+    """Extract PSDs for all populations as numpy arrays, then data can be freed."""
+    psds = {}
+    for pop in ['stn', 'gpe', 'gpi']:
+        psds[pop] = compute_psd(obs[f'V_{pop}'], dt_ms, burn_steps)
+    return psds
+
 # Warm up
 print("Warming up JIT...")
 obs = simulator(healthy_params, state)
@@ -119,6 +145,11 @@ print(f"  Time: {time.time()-t0:.1f}s")
 
 metrics_h = compute_all_metrics(obs_h, DT_MS, burn_steps=BURN_STEPS)
 beta_h = compute_beta_fraction_all(obs_h, DT_MS, burn_steps=BURN_STEPS)
+psd_h = extract_psds(obs_h, DT_MS, BURN_STEPS)
+
+del obs_h
+gc.collect()
+jax.clear_caches()
 
 # PD without DBS
 print("\nRunning PD (no DBS)...")
@@ -129,6 +160,11 @@ print(f"  Time: {time.time()-t0:.1f}s")
 
 metrics_pd = compute_all_metrics(obs_pd, DT_MS, burn_steps=BURN_STEPS)
 beta_pd = compute_beta_fraction_all(obs_pd, DT_MS, burn_steps=BURN_STEPS)
+psd_pd = extract_psds(obs_pd, DT_MS, BURN_STEPS)
+
+del obs_pd
+gc.collect()
+jax.clear_caches()
 
 # PD with DBS
 print("\nRunning PD + DBS...")
@@ -139,6 +175,11 @@ print(f"  Time: {time.time()-t0:.1f}s")
 
 metrics_dbs = compute_all_metrics(obs_dbs, DT_MS, burn_steps=BURN_STEPS)
 beta_dbs = compute_beta_fraction_all(obs_dbs, DT_MS, burn_steps=BURN_STEPS)
+psd_dbs = extract_psds(obs_dbs, DT_MS, BURN_STEPS)
+
+del obs_dbs
+gc.collect()
+jax.clear_caches()
 
 # =============================================================================
 # RESULTS
@@ -181,35 +222,25 @@ plt.rcParams.update({
     'axes.linewidth': 1.2,
 })
 
-from scipy.signal import welch as scipy_welch
-
 fig, axes = plt.subplots(2, 3, figsize=(14, 8))
 fig.suptitle(f'Figure 7: DBS Suppresses Beta Oscillations ({N_STN+N_GPE+N_GPI} neurons)',
              fontsize=14, fontweight='bold')
-
-def compute_psd(V_trace, dt_ms, burn_steps=4000):
-    valid_V = np.array(V_trace[burn_steps:])
-    lfp = np.mean(valid_V, axis=1)
-    fs = 1000.0 / dt_ms
-    nperseg = min(len(lfp), int(fs * 0.5))
-    freqs, psd = scipy_welch(lfp, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
-    return freqs, psd
 
 # Row 1: Power Spectra (STN primary, GPe/GPi supplementary)
 populations = ['stn', 'gpe', 'gpi']
 pop_labels = ['STN (primary)', 'GPe', 'GPi']
 
 for col, (pop, label) in enumerate(zip(populations, pop_labels)):
-    freqs_pd, psd_pd = compute_psd(obs_pd[f'V_{pop}'], DT_MS)
-    freqs_dbs, psd_dbs = compute_psd(obs_dbs[f'V_{pop}'], DT_MS)
-    freqs_h, psd_h = compute_psd(obs_h[f'V_{pop}'], DT_MS)
+    freqs_h, psd_h_pop = psd_h[pop]
+    freqs_pd, psd_pd_pop = psd_pd[pop]
+    freqs_dbs, psd_dbs_pop = psd_dbs[pop]
     mask = freqs_pd <= 50
 
-    axes[0, col].semilogy(freqs_h[mask], psd_h[mask], 'b-',
+    axes[0, col].semilogy(freqs_h[mask], psd_h_pop[mask], 'b-',
                           label='Healthy', linewidth=1, alpha=0.5)
-    axes[0, col].semilogy(freqs_pd[mask], psd_pd[mask], 'r-',
+    axes[0, col].semilogy(freqs_pd[mask], psd_pd_pop[mask], 'r-',
                           label='PD (DBS OFF)', linewidth=1.5)
-    axes[0, col].semilogy(freqs_dbs[mask], psd_dbs[mask], 'g-',
+    axes[0, col].semilogy(freqs_dbs[mask], psd_dbs_pop[mask], 'g-',
                           label='PD + DBS (ON)', linewidth=1.5)
     axes[0, col].axvspan(13, 30, alpha=0.2, color='orange')
     axes[0, col].set_xlabel('Frequency (Hz)')
