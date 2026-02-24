@@ -1,8 +1,10 @@
 """
-Performance benchmarking — JAX vs NumPy baseline.
+Performance benchmarking -- JAX vs NumPy baseline.
 
 Measures wall-clock time for JAX JIT simulation at multiple network sizes
 and compares against the NumPy CPU baseline at 450 neurons.
+
+Both conditions use the multiplier-applying simulator pattern.
 
 Author: Kavin Nakkeeran, Johns Hopkins University
 """
@@ -20,7 +22,9 @@ import platform
 from datetime import datetime
 
 from jax_models.network_builder import build_network_state
-from optimization.sim_jax import create_simulation_fn
+from optimization.sim_jax import apply_params_to_config
+from jax_models.integrator import network_step
+from jax import lax
 
 print(f"JAX devices: {jax.devices()}")
 
@@ -29,40 +33,64 @@ print(f"JAX devices: {jax.devices()}")
 # =============================================================================
 
 DT_MS = 0.025
-SIM_DURATION_MS = 600.0   # 600ms total
+SIM_DURATION_MS = 600.0
 N_STEPS = int(SIM_DURATION_MS / DT_MS)  # 24000
 
-# Network sizes to benchmark
 NETWORK_SIZES = [
-    (100, 200, 150),    # 450 neurons (optimization)
-    (400, 800, 600),    # 1800 neurons (publication)
-    (1000, 2000, 1500), # 4500 neurons
+    (100,   200,   150),    # 450 neurons
+    (400,   800,   600),    # 1800 neurons
+    (1000,  2000,  1500),   # 4500 neurons
+    (3334,  6666,  5000),   # 15000 neurons
+    (10000, 20000, 15000),  # 45000 neurons
 ]
 
-# Parameters for benchmarking (healthy)
 BENCH_PARAMS = {
-    'ISTN': 140.0,
-    'I_gpe': 3.379,
-    'I_gpi': 2.188,
-    'noise_stn_sigma': 0.996,
-    'noise_gpe_sigma': 97.760,
-    'noise_gpi_sigma': 69.678,
+    'ISTN': 132.235, 'I_gpe': 3.039, 'I_gpi': 2.209,
+    'noise_stn_sigma': 3.362, 'noise_gpe_sigma': 33.417, 'noise_gpi_sigma': 67.284,
+    'g_stn_gpe_mult': 1.866, 'g_gpe_stn_mult': 0.999,
+    'g_stn_gpi_mult': 1.834, 'g_gpe_gpi_mult': 0.687,
 }
 
-N_WARMUP = 1   # JIT warmup runs
-N_REPEATS = 3  # Timed runs (take median)
+N_WARMUP = 1
+N_REPEATS = 3
+
+# =============================================================================
+# SIMULATOR WITH SYNAPTIC MULTIPLIERS
+# =============================================================================
+
+def create_simulator(base_config, n_steps):
+    @jax.jit
+    def simulate(trial_params, init_state):
+        config = apply_params_to_config(trial_params, base_config)
+        syn_configs = dict(config['synapses'])
+        for syn_name, mult_name in [
+            ('stn_to_gpe', 'g_stn_gpe_mult'),
+            ('gpe_to_stn', 'g_gpe_stn_mult'),
+            ('stn_to_gpi', 'g_stn_gpi_mult'),
+            ('gpe_to_gpi', 'g_gpe_gpi_mult'),
+        ]:
+            old_cfg = syn_configs[syn_name]
+            new_weights = old_cfg.weights * trial_params.get(mult_name, 1.0)
+            syn_configs[syn_name] = old_cfg._replace(weights=new_weights)
+        config['synapses'] = syn_configs
+        def step_fn(carry_state, t_idx):
+            t_ms = t_idx * config['dt_ms']
+            new_state, obs = network_step(carry_state, config, t_ms)
+            return new_state, obs
+        _, obs_history = lax.scan(step_fn, init=init_state, xs=jnp.arange(n_steps))
+        return obs_history
+    return simulate
 
 # =============================================================================
 # JAX BENCHMARKS
 # =============================================================================
 
 def benchmark_jax(n_stn, n_gpe, n_gpi):
-    """Benchmark JAX JIT simulation at given network size."""
     total = n_stn + n_gpe + n_gpi
     print(f"\n  JAX {total} neurons ({n_stn}/{n_gpe}/{n_gpi})...")
 
     state, config = build_network_state(n_stn, n_gpe, n_gpi, DT_MS, seed=42)
-    simulator = create_simulation_fn(config, n_steps=N_STEPS)
+    simulator = create_simulator(config, N_STEPS)
 
     # JIT warmup
     print(f"    Compiling...", end=" ", flush=True)
@@ -72,7 +100,6 @@ def benchmark_jax(n_stn, n_gpe, n_gpi):
     jit_compile_time = time.time() - t0
     print(f"{jit_compile_time:.1f}s")
 
-    # Additional warmup runs
     for _ in range(N_WARMUP - 1):
         obs = simulator(BENCH_PARAMS, state)
         obs['V_stn'].block_until_ready()
@@ -108,24 +135,29 @@ def benchmark_jax(n_stn, n_gpe, n_gpi):
 # =============================================================================
 
 def benchmark_numpy_baseline():
-    """
-    Benchmark NumPy CPU baseline at 450 neurons using a Python loop.
-    Uses the JAX model code but without JIT — steps through Python.
-    """
-    from jax_models.integrator import network_step
-
+    """Benchmark NumPy CPU baseline at 450 neurons using a Python loop."""
     n_stn, n_gpe, n_gpi = 100, 200, 150
     total = n_stn + n_gpe + n_gpi
     print(f"\n  NumPy baseline {total} neurons (Python loop)...")
 
     state, config = build_network_state(n_stn, n_gpe, n_gpi, DT_MS, seed=42)
 
-    # Apply params to config
-    from optimization.sim_jax import apply_params_to_config
+    # Apply params including multipliers
     config = apply_params_to_config(BENCH_PARAMS, config)
+    syn_configs = dict(config['synapses'])
+    for syn_name, mult_name in [
+        ('stn_to_gpe', 'g_stn_gpe_mult'),
+        ('gpe_to_stn', 'g_gpe_stn_mult'),
+        ('stn_to_gpi', 'g_stn_gpi_mult'),
+        ('gpe_to_gpi', 'g_gpe_gpi_mult'),
+    ]:
+        old_cfg = syn_configs[syn_name]
+        new_weights = old_cfg.weights * BENCH_PARAMS.get(mult_name, 1.0)
+        syn_configs[syn_name] = old_cfg._replace(weights=new_weights)
+    config['synapses'] = syn_configs
 
-    # Use a shorter simulation for NumPy (it's slow)
-    numpy_steps = min(N_STEPS, 4000)  # 100ms max for baseline
+    # Shorter simulation for NumPy (it's slow)
+    numpy_steps = min(N_STEPS, 4000)  # 100ms max
     numpy_sim_ms = numpy_steps * DT_MS
 
     print(f"    Running {numpy_steps} steps ({numpy_sim_ms}ms)...")
@@ -134,11 +166,9 @@ def benchmark_numpy_baseline():
     for i in range(numpy_steps):
         t_ms = i * DT_MS
         current_state, obs = network_step(current_state, config, t_ms)
-    # Force evaluation
     obs['V_stn'].block_until_ready()
     elapsed = time.time() - t0
 
-    # Extrapolate to full duration
     extrapolated = elapsed * (N_STEPS / numpy_steps)
 
     print(f"    Time ({numpy_steps} steps): {elapsed:.2f}s")
@@ -169,8 +199,16 @@ if __name__ == "__main__":
     # JAX benchmarks
     jax_results = []
     for sizes in NETWORK_SIZES:
-        result = benchmark_jax(*sizes)
-        jax_results.append(result)
+        try:
+            result = benchmark_jax(*sizes)
+            jax_results.append(result)
+        except Exception as e:
+            print(f"    FAILED: {e}")
+            jax_results.append({
+                'n_stn': sizes[0], 'n_gpe': sizes[1], 'n_gpi': sizes[2],
+                'n_total': sum(sizes), 'error': str(e),
+            })
+            jax.clear_caches()
 
     # NumPy baseline
     print("\n" + "-" * 50)
@@ -188,21 +226,23 @@ if __name__ == "__main__":
     print(f"{'Neurons':<10} {'Backend':<10} {'Sim (ms)':<10} {'Wall (s)':<12} {'Speedup':<10}")
     print("-" * 52)
 
-    # NumPy baseline row
     print(f"{numpy_result['n_total']:<10} {'NumPy':<10} {SIM_DURATION_MS:<10.0f} "
           f"{baseline_time:<12.2f} {'1.0x (ref)':<10}")
 
-    # JAX rows
     for r in jax_results:
+        if 'error' in r:
+            print(f"{r['n_total']:<10} {'JAX/JIT':<10} {'FAILED':<10}")
+            continue
         speedup = baseline_time / r['median_s'] if r['n_total'] == 450 else None
-        speedup_str = f"{speedup:.0f}x" if speedup else "—"
+        speedup_str = f"{speedup:.0f}x" if speedup else "--"
         print(f"{r['n_total']:<10} {'JAX/JIT':<10} {SIM_DURATION_MS:<10.0f} "
               f"{r['median_s']:<12.3f} {speedup_str:<10}")
 
     # JIT compile times
     print(f"\nJIT compile times:")
     for r in jax_results:
-        print(f"  {r['n_total']} neurons: {r['jit_compile_s']:.1f}s")
+        if 'error' not in r:
+            print(f"  {r['n_total']} neurons: {r['jit_compile_s']:.1f}s")
 
     # =========================================================================
     # SAVE RESULTS
@@ -223,11 +263,11 @@ if __name__ == "__main__":
     output = {
         'jax_results': jax_results,
         'numpy_baseline': numpy_result,
+        'bench_params': BENCH_PARAMS,
         'metadata': metadata,
     }
 
     with open('results/benchmarks/performance_table.json', 'w') as f:
-        # Convert to JSON-serializable format
         json.dump(output, f, indent=2, default=str)
 
     with open('results/benchmarks/performance_table.pkl', 'wb') as f:

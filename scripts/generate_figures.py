@@ -1,7 +1,9 @@
 """
 Publication Figure Generation for CBGTC HH Network
 Author: Kavin Nakkeeran, Johns Hopkins University
-Updated with actual optimization results (Feb 2026)
+
+Uses STN beta as the primary beta metric.
+All simulations at 45000 neurons (10000/20000/15000).
 """
 
 import sys
@@ -13,11 +15,12 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.signal import welch
 import pickle
+import json
 import jax
 import jax.numpy as jnp
 
 from jax_models.network_builder import build_network_state
-from optimization.sim_jax import create_simulation_fn, apply_params_to_config
+from optimization.sim_jax import apply_params_to_config
 from optimization.metrics_jax import compute_all_metrics, compute_beta_fraction_all
 from jax_models.integrator import network_step
 from jax import lax
@@ -28,12 +31,15 @@ print(f"JAX devices: {jax.devices()}")
 # SETUP
 # =============================================================================
 
-print("Building 1800-neuron network...")
-state, config = build_network_state(400, 800, 600, 0.025)
+N_STN, N_GPE, N_GPI = 10000, 20000, 15000
+DT_MS = 0.025
+N_STEPS = 24000  # 600ms
+BURN_STEPS = 4000
 
-simulator = create_simulation_fn(config, n_steps=24000)
+print(f"Building {N_STN + N_GPE + N_GPI}-neuron network...")
+state, config = build_network_state(N_STN, N_GPE, N_GPI, DT_MS)
 
-def create_pd_simulator(base_config, n_steps):
+def create_simulator(base_config, n_steps):
     @jax.jit
     def simulate(trial_params, init_state):
         config = apply_params_to_config(trial_params, base_config)
@@ -56,35 +62,31 @@ def create_pd_simulator(base_config, n_steps):
         return obs_history
     return simulate
 
-pd_simulator = create_pd_simulator(config, 24000)
+simulator = create_simulator(config, N_STEPS)
 
 # ---------------------------------------------------------------------------
-# ACTUAL OPTIMIZED PARAMETERS (from optimization runs)
+# PARAMETERS (from 450n optimization with fixed-indegree)
 # ---------------------------------------------------------------------------
 healthy_params = {
-    'ISTN': 101.789,
-    'I_gpe': 2.784,
-    'I_gpi': 2.261,
-    'noise_stn_sigma': 3.116,
-    'noise_gpe_sigma': 98.463,
-    'noise_gpi_sigma': 68.379,
+    'ISTN': 132.235, 'I_gpe': 3.039, 'I_gpi': 2.209,
+    'noise_stn_sigma': 3.362, 'noise_gpe_sigma': 33.417, 'noise_gpi_sigma': 67.284,
+    'g_stn_gpe_mult': 1.866, 'g_gpe_stn_mult': 0.999,
+    'g_stn_gpi_mult': 1.834, 'g_gpe_gpi_mult': 0.687,
 }
 
 pd_params = {
-    'ISTN': 61.927,
-    'I_gpe': 0.937,
-    'I_gpi': 1.838,
-    'noise_stn_sigma': 7.760,
-    'noise_gpe_sigma': 141.162,
-    'noise_gpi_sigma': 74.126,
-    'g_stn_gpe_mult': 4.148,
-    'g_gpe_stn_mult': 0.761,
-    'g_stn_gpi_mult': 3.504,
-    'g_gpe_gpi_mult': 1.077,
+    'ISTN': 70.048, 'I_gpe': 1.663, 'I_gpi': 1.670,
+    'noise_stn_sigma': 1.971, 'noise_gpe_sigma': 66.383, 'noise_gpi_sigma': 96.429,
+    'g_stn_gpe_mult': 4.132, 'g_gpe_stn_mult': 0.114,
+    'g_stn_gpi_mult': 1.943, 'g_gpe_gpi_mult': 0.996,
 }
 
-# Synaptic multiplier ratios for figure 4
-HEALTHY_MULTS = {'stn_gpe': 1.0, 'gpe_stn': 1.0, 'stn_gpi': 1.0, 'gpe_gpi': 1.0}
+HEALTHY_MULTS = {
+    'stn_gpe': healthy_params['g_stn_gpe_mult'],
+    'gpe_stn': healthy_params['g_gpe_stn_mult'],
+    'stn_gpi': healthy_params['g_stn_gpi_mult'],
+    'gpe_gpi': healthy_params['g_gpe_gpi_mult'],
+}
 PD_MULTS = {
     'stn_gpe': pd_params['g_stn_gpe_mult'],
     'gpe_stn': pd_params['g_gpe_stn_mult'],
@@ -93,24 +95,26 @@ PD_MULTS = {
 }
 
 # Run simulations
-print("Running healthy simulation (1800 neurons, 600ms)...")
+print("Running healthy simulation...")
 obs_h = simulator(healthy_params, state)
 obs_h['V_stn'].block_until_ready()
 print("  Done.")
 
-print("Running PD simulation (1800 neurons, 600ms)...")
-obs_pd = pd_simulator(pd_params, state)
+print("Running PD simulation...")
+obs_pd = simulator(pd_params, state)
 obs_pd['V_stn'].block_until_ready()
 print("  Done.")
 
 # Compute metrics
-metrics_h = compute_all_metrics(obs_h, 0.025, burn_steps=4000)
-metrics_pd = compute_all_metrics(obs_pd, 0.025, burn_steps=4000)
-beta_h = compute_beta_fraction_all(obs_h, 0.025, burn_steps=4000)
-beta_pd = compute_beta_fraction_all(obs_pd, 0.025, burn_steps=4000)
+metrics_h = compute_all_metrics(obs_h, DT_MS, burn_steps=BURN_STEPS)
+metrics_pd = compute_all_metrics(obs_pd, DT_MS, burn_steps=BURN_STEPS)
+beta_h = compute_beta_fraction_all(obs_h, DT_MS, burn_steps=BURN_STEPS)
+beta_pd = compute_beta_fraction_all(obs_pd, DT_MS, burn_steps=BURN_STEPS)
 
-print(f"\nHealthy: STN={metrics_h['firing_rates']['stn']:.1f} GPe={metrics_h['firing_rates']['gpe']:.1f} GPi={metrics_h['firing_rates']['gpi']:.1f} beta={beta_h['gpe']*100:.1f}%")
-print(f"PD:      STN={metrics_pd['firing_rates']['stn']:.1f} GPe={metrics_pd['firing_rates']['gpe']:.1f} GPi={metrics_pd['firing_rates']['gpi']:.1f} beta={beta_pd['gpe']*100:.1f}%")
+print(f"\nHealthy: STN={metrics_h['firing_rates']['stn']:.1f} GPe={metrics_h['firing_rates']['gpe']:.1f} "
+      f"GPi={metrics_h['firing_rates']['gpi']:.1f} STN beta={beta_h['stn']*100:.1f}%")
+print(f"PD:      STN={metrics_pd['firing_rates']['stn']:.1f} GPe={metrics_pd['firing_rates']['gpe']:.1f} "
+      f"GPi={metrics_pd['firing_rates']['gpi']:.1f} STN beta={beta_pd['stn']*100:.1f}%")
 
 print("\nGenerating figures...")
 
@@ -118,7 +122,7 @@ print("\nGenerating figures...")
 # STYLE
 # =============================================================================
 plt.rcParams.update({
-    'font.family': 'Arial',
+    'font.family': 'DejaVu Sans',
     'font.size': 10,
     'axes.linewidth': 1.2,
     'xtick.major.width': 1.0,
@@ -150,12 +154,12 @@ def compute_psd_welch(V_trace, dt_ms, burn_steps=4000):
     valid_V = np.array(V_trace[burn_steps:])
     lfp = np.mean(valid_V, axis=1)
     fs = 1000.0 / dt_ms
-    nperseg = min(len(lfp), int(fs * 0.5))  # 500ms windows
+    nperseg = min(len(lfp), int(fs * 0.5))
     freqs, psd = welch(lfp, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
     return freqs, psd
 
 # =============================================================================
-# FIGURE 1: Raster Plots (Healthy vs PD)
+# FIGURE 1: Raster Plots (Healthy vs PD) — subsample to 100 neurons
 # =============================================================================
 
 fig1, axes = plt.subplots(2, 3, figsize=(14, 7))
@@ -163,25 +167,30 @@ fig1, axes = plt.subplots(2, 3, figsize=(14, 7))
 populations = ['stn', 'gpe', 'gpi']
 pop_labels = ['STN', 'GPe', 'GPi']
 pop_colors = [STN_COLOR, GPE_COLOR, GPI_COLOR]
-n_neurons = [400, 800, 600]
-t_win = (0, 250)  # ms window
+n_neurons = [N_STN, N_GPE, N_GPI]
+t_win = (0, 250)
+N_DISPLAY = 100  # subsample for display
 
 for col, (pop, label, color, n_n) in enumerate(zip(populations, pop_labels, pop_colors, n_neurons)):
-    for row, (obs, cond, cond_color) in enumerate([(obs_h, 'Healthy', HEALTHY_COLOR), (obs_pd, 'PD', PD_COLOR)]):
-        times, neurons = get_spike_times(obs[f'spikes_{pop}'], 0.025)
+    subsample = np.linspace(0, n_n-1, min(N_DISPLAY, n_n), dtype=int)
+    for row, (obs, cond, m) in enumerate([
+        (obs_h, 'Healthy', metrics_h),
+        (obs_pd, 'PD', metrics_pd),
+    ]):
+        times, neurons = get_spike_times(obs[f'spikes_{pop}'], DT_MS)
         mask_t = (times >= t_win[0]) & (times <= t_win[1])
-        subsample = np.linspace(0, n_n-1, min(100, n_n), dtype=int)
         mask_n = np.isin(neurons, subsample)
-        
-        m = compute_all_metrics(obs, 0.025, burn_steps=4000) if row == 0 else metrics_pd
-        if row == 0:
-            m = metrics_h
-        
-        axes[row, col].scatter(times[mask_t & mask_n], neurons[mask_t & mask_n],
+
+        # Remap neuron indices to display indices for clean y-axis
+        neuron_map = {orig: disp for disp, orig in enumerate(subsample)}
+        display_neurons = np.array([neuron_map.get(n, -1) for n in neurons])
+        valid = mask_t & mask_n & (display_neurons >= 0)
+
+        axes[row, col].scatter(times[valid], display_neurons[valid],
                                s=0.3, c=color, alpha=0.6, rasterized=True)
         axes[row, col].set_xlim(*t_win)
-        axes[row, col].set_ylim(0, n_n)
-        axes[row, col].set_title(f'{label} — {cond} ({m["firing_rates"][pop]:.1f} Hz)', fontsize=10)
+        axes[row, col].set_ylim(0, N_DISPLAY)
+        axes[row, col].set_title(f'{label} -- {cond} ({m["firing_rates"][pop]:.1f} Hz)', fontsize=10)
         if col == 0:
             axes[row, col].set_ylabel('Neuron #')
         if row == 1:
@@ -194,22 +203,23 @@ plt.close()
 print("  Fig 1: Raster plots")
 
 # =============================================================================
-# FIGURE 2: Power Spectra (Welch)
+# FIGURE 2: Power Spectra — STN primary, GPe/GPi also shown
 # =============================================================================
 
 fig2, axes = plt.subplots(1, 3, figsize=(14, 4))
+psd_labels = ['STN (primary)', 'GPe', 'GPi']
 
-for col, (pop, label) in enumerate(zip(populations, pop_labels)):
-    freqs_h, psd_h = compute_psd_welch(obs_h[f'V_{pop}'], 0.025)
-    freqs_pd, psd_pd = compute_psd_welch(obs_pd[f'V_{pop}'], 0.025)
+for col, (pop, label) in enumerate(zip(populations, psd_labels)):
+    freqs_h, psd_h = compute_psd_welch(obs_h[f'V_{pop}'], DT_MS)
+    freqs_pd, psd_pd = compute_psd_welch(obs_pd[f'V_{pop}'], DT_MS)
     mask = freqs_h <= 60
-    
+
     axes[col].semilogy(freqs_h[mask], psd_h[mask], color=HEALTHY_COLOR, linewidth=1.5, label='Healthy')
     axes[col].semilogy(freqs_pd[mask], psd_pd[mask], color=PD_COLOR, linewidth=1.5, label='PD')
     axes[col].axvspan(13, 30, alpha=0.15, color=BETA_BAND_COLOR, label='Beta band')
     axes[col].set_xlabel('Frequency (Hz)')
-    axes[col].set_ylabel('Power (mV²/Hz)')
-    axes[col].set_title(f'{label}  (β: {beta_h[pop]*100:.1f}% → {beta_pd[pop]*100:.1f}%)')
+    axes[col].set_ylabel('Power (mV^2/Hz)')
+    axes[col].set_title(f'{label}  (beta: {beta_h[pop]*100:.1f}% -> {beta_pd[pop]*100:.1f}%)')
     axes[col].legend(fontsize=8)
     axes[col].set_xlim(0, 60)
     axes[col].grid(True, alpha=0.2)
@@ -221,7 +231,7 @@ plt.close()
 print("  Fig 2: Power spectra")
 
 # =============================================================================
-# FIGURE 3: Firing Rates + Beta Bar Charts
+# FIGURE 3: Firing Rates + STN Beta Bar Charts
 # =============================================================================
 
 fig3, axes = plt.subplots(1, 2, figsize=(11, 5))
@@ -243,28 +253,29 @@ axes[0].set_xticklabels(pop_labels)
 axes[0].legend()
 axes[0].set_title('A. Firing Rates')
 
-bh = [beta_h[p]*100 for p in populations]
-bpd = [beta_pd[p]*100 for p in populations]
+# STN beta (primary metric)
+x_beta = np.arange(1)
+bh_stn = beta_h['stn'] * 100
+bpd_stn = beta_pd['stn'] * 100
 
-axes[1].bar(x - w/2, bh, w, label='Healthy', color=HEALTHY_COLOR, edgecolor='black', linewidth=0.5)
-axes[1].bar(x + w/2, bpd, w, label='PD', color=PD_COLOR, edgecolor='black', linewidth=0.5)
-for i, (vh, vpd) in enumerate(zip(bh, bpd)):
-    axes[1].text(i - w/2, vh + 0.3, f'{vh:.1f}%', ha='center', va='bottom', fontsize=8)
-    axes[1].text(i + w/2, vpd + 0.3, f'{vpd:.1f}%', ha='center', va='bottom', fontsize=8)
-axes[1].set_ylabel('Beta Power (% of total)')
-axes[1].set_xticks(x)
-axes[1].set_xticklabels(pop_labels)
+axes[1].bar(x_beta - w/2, [bh_stn], w, label='Healthy', color=HEALTHY_COLOR, edgecolor='black', linewidth=0.5)
+axes[1].bar(x_beta + w/2, [bpd_stn], w, label='PD', color=PD_COLOR, edgecolor='black', linewidth=0.5)
+axes[1].text(-w/2, bh_stn + 0.3, f'{bh_stn:.1f}%', ha='center', va='bottom', fontsize=8)
+axes[1].text(w/2, bpd_stn + 0.3, f'{bpd_stn:.1f}%', ha='center', va='bottom', fontsize=8)
+axes[1].set_ylabel('STN Beta Power (% of total)')
+axes[1].set_xticks(x_beta)
+axes[1].set_xticklabels(['STN'])
 axes[1].legend()
-axes[1].set_title('B. Beta Band Power (13–30 Hz)')
+axes[1].set_title('B. STN Beta Band Power (13-30 Hz)')
 
 plt.tight_layout()
 plt.savefig('results/figures/fig3_firing_rates_beta.png', dpi=300, bbox_inches='tight')
 plt.savefig('results/figures/fig3_firing_rates_beta.pdf', bbox_inches='tight')
 plt.close()
-print("  Fig 3: Firing rates + beta")
+print("  Fig 3: Firing rates + STN beta")
 
 # =============================================================================
-# FIGURE 4: Network Schematic — Synaptic Ratios
+# FIGURE 4: Network Schematic -- Healthy and PD multipliers with ratios
 # =============================================================================
 
 fig4, axes = plt.subplots(1, 2, figsize=(13, 6))
@@ -275,67 +286,72 @@ def draw_network(ax, title, mults, highlight_key=None):
     ax.set_aspect('equal')
     ax.axis('off')
     ax.set_title(title, fontsize=12, fontweight='bold')
-    
+
     pos = {'STN': (0, 1.2), 'GPe': (-1.3, -0.3), 'GPi': (1.3, -0.3)}
     cols = {'STN': STN_COLOR, 'GPe': GPE_COLOR, 'GPi': GPI_COLOR}
-    
+
     for name, (cx, cy) in pos.items():
         circle = plt.Circle((cx, cy), 0.45, color=cols[name], ec='black', linewidth=2, zorder=10)
         ax.add_patch(circle)
         ax.text(cx, cy, name, ha='center', va='center', fontsize=13, fontweight='bold', color='white', zorder=11)
-    
+
     conns = [
         ('STN', 'GPe', 'stn_gpe', 'exc'),
         ('GPe', 'STN', 'gpe_stn', 'inh'),
         ('STN', 'GPi', 'stn_gpi', 'exc'),
         ('GPe', 'GPi', 'gpe_gpi', 'inh'),
     ]
-    
+
     for src, tgt, key, ctype in conns:
         x1, y1 = pos[src]
         x2, y2 = pos[tgt]
         dx, dy = x2 - x1, y2 - y1
         dist = np.sqrt(dx**2 + dy**2)
         ux, uy = dx/dist, dy/dist
-        
-        # Offset for bidirectional arrows
+
         perp_x, perp_y = -uy * 0.08, ux * 0.08
         if key == 'gpe_stn':
             perp_x, perp_y = uy * 0.08, -ux * 0.08
-        
+
         x1a = x1 + ux * 0.50 + perp_x
         y1a = y1 + uy * 0.50 + perp_y
         x2a = x2 - ux * 0.50 + perp_x
         y2a = y2 - uy * 0.50 + perp_y
-        
+
         mult = mults[key]
         color = '#2CA02C' if ctype == 'exc' else '#D62728'
         lw = 1.5 + mult * 1.0
-        
+
         ax.annotate('', xy=(x2a, y2a), xytext=(x1a, y1a),
                      arrowprops=dict(arrowstyle='->', color=color, lw=lw, mutation_scale=15))
-        
+
         mid_x = (x1a + x2a) / 2
         mid_y = (y1a + y2a) / 2
-        
-        # Label
+
         fontweight = 'bold' if key == highlight_key else 'normal'
         bbox_color = '#FFFF99' if key == highlight_key else 'white'
-        ax.text(mid_x + perp_x * 3, mid_y + perp_y * 3, f'{mult:.2f}×',
+        ax.text(mid_x + perp_x * 3, mid_y + perp_y * 3, f'{mult:.2f}x',
                 fontsize=10, ha='center', va='center', fontweight=fontweight,
                 bbox=dict(boxstyle='round,pad=0.3', facecolor=bbox_color, edgecolor='gray', alpha=0.9))
-    
+
     ax.plot([], [], color='#2CA02C', linewidth=3, label='Excitatory')
     ax.plot([], [], color='#D62728', linewidth=3, label='Inhibitory')
     ax.legend(loc='lower center', fontsize=9, ncol=2)
 
-draw_network(axes[0], 'A. Healthy (All 1.00×)', HEALTHY_MULTS)
-draw_network(axes[1], 'B. Parkinsonian (Optimizer-Discovered)', PD_MULTS, highlight_key='gpe_stn')
+draw_network(axes[0], 'A. Healthy', HEALTHY_MULTS)
+draw_network(axes[1], 'B. Parkinsonian', PD_MULTS, highlight_key='gpe_stn')
 
-# Annotation for PD panel
-axes[1].text(0, -1.8, 
-    f'Excitation ↑↑ (STN→GPe {PD_MULTS["stn_gpe"]:.1f}×, STN→GPi {PD_MULTS["stn_gpi"]:.1f}×)\n'
-    f'Inhibition ↓  (GPe→STN {PD_MULTS["gpe_stn"]:.2f}×) — only synapse that decreased',
+# PD/Healthy ratios annotation
+ratios = {
+    'stn_gpe': PD_MULTS['stn_gpe'] / HEALTHY_MULTS['stn_gpe'],
+    'gpe_stn': PD_MULTS['gpe_stn'] / HEALTHY_MULTS['gpe_stn'],
+    'stn_gpi': PD_MULTS['stn_gpi'] / HEALTHY_MULTS['stn_gpi'],
+    'gpe_gpi': PD_MULTS['gpe_gpi'] / HEALTHY_MULTS['gpe_gpi'],
+}
+axes[1].text(0, -1.8,
+    f'PD/Healthy ratios:\n'
+    f'STN->GPe: {ratios["stn_gpe"]:.2f}x  |  GPe->STN: {ratios["gpe_stn"]:.2f}x  |  '
+    f'STN->GPi: {ratios["stn_gpi"]:.2f}x  |  GPe->GPi: {ratios["gpe_gpi"]:.2f}x',
     ha='center', va='center', fontsize=9,
     bbox=dict(boxstyle='round', facecolor='lightyellow', edgecolor='orange', alpha=0.9))
 
@@ -346,136 +362,239 @@ plt.close()
 print("  Fig 4: Network schematic")
 
 # =============================================================================
-# FIGURE 5: LFP Traces
+# FIGURE 5: STN LFP Traces (primary beta metric)
 # =============================================================================
 
 fig5, axes = plt.subplots(2, 1, figsize=(12, 5), sharex=True)
 
-lfp_h = np.mean(np.array(obs_h['V_gpe'][4000:]), axis=1)
-lfp_pd = np.mean(np.array(obs_pd['V_gpe'][4000:]), axis=1)
-t = np.arange(len(lfp_h)) * 0.025
-t_win = (50, 350)
-mask = (t >= t_win[0]) & (t <= t_win[1])
+lfp_h = np.mean(np.array(obs_h['V_stn'][BURN_STEPS:]), axis=1)
+lfp_pd = np.mean(np.array(obs_pd['V_stn'][BURN_STEPS:]), axis=1)
+t = np.arange(len(lfp_h)) * DT_MS
+t_win_lfp = (50, 350)
+mask = (t >= t_win_lfp[0]) & (t <= t_win_lfp[1])
 
 axes[0].plot(t[mask], lfp_h[mask], color=HEALTHY_COLOR, linewidth=0.6)
 axes[0].set_ylabel('LFP (mV)')
-axes[0].set_title(f'Healthy GPe — Beta: {beta_h["gpe"]*100:.1f}%')
+axes[0].set_title(f'Healthy STN -- Beta: {beta_h["stn"]*100:.1f}%')
 axes[0].grid(True, alpha=0.2)
 
 axes[1].plot(t[mask], lfp_pd[mask], color=PD_COLOR, linewidth=0.6)
 axes[1].set_xlabel('Time (ms)')
 axes[1].set_ylabel('LFP (mV)')
-axes[1].set_title(f'Parkinsonian GPe — Beta: {beta_pd["gpe"]*100:.1f}%')
+axes[1].set_title(f'Parkinsonian STN -- Beta: {beta_pd["stn"]*100:.1f}%')
 axes[1].grid(True, alpha=0.2)
 
 plt.tight_layout()
 plt.savefig('results/figures/fig5_lfp_traces.png', dpi=300, bbox_inches='tight')
 plt.savefig('results/figures/fig5_lfp_traces.pdf', bbox_inches='tight')
 plt.close()
-print("  Fig 5: LFP traces")
+print("  Fig 5: STN LFP traces")
+
+# =============================================================================
+# FIGURE 8: Scaling Invariance (from run_scaling_study.py results)
+# =============================================================================
+
+try:
+    with open('results/validation/scaling_study.pkl', 'rb') as f:
+        scaling_data = pickle.load(f)
+
+    sc_results = scaling_data['results']
+    sc_sizes = scaling_data['config']['sizes']
+
+    # Collect data for plotting
+    size_labels = []
+    size_totals = []
+    h_rates_stn, h_rates_gpe, h_rates_gpi = [], [], []
+    pd_rates_stn, pd_rates_gpe, pd_rates_gpi = [], [], []
+    h_beta_stn, pd_beta_stn = [], []
+    h_wall, pd_wall = [], []
+
+    for n_stn_s, n_gpe_s, n_gpi_s, label in sc_sizes:
+        res = sc_results.get(label)
+        if res is None or 'error' in res:
+            continue
+        size_labels.append(label)
+        size_totals.append(n_stn_s + n_gpe_s + n_gpi_s)
+        h = res['healthy']
+        p = res['pd']
+        h_rates_stn.append(h['firing_rates']['stn'])
+        h_rates_gpe.append(h['firing_rates']['gpe'])
+        h_rates_gpi.append(h['firing_rates']['gpi'])
+        pd_rates_stn.append(p['firing_rates']['stn'])
+        pd_rates_gpe.append(p['firing_rates']['gpe'])
+        pd_rates_gpi.append(p['firing_rates']['gpi'])
+        h_beta_stn.append(h['beta']['stn'] * 100)
+        pd_beta_stn.append(p['beta']['stn'] * 100)
+        h_wall.append(h['run_time_s'])
+        pd_wall.append(p['run_time_s'])
+
+    fig8, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    x_pos = np.arange(len(size_totals))
+
+    # Panel A: Firing rates vs size
+    axes[0].plot(x_pos, h_rates_stn, 'o-', color=STN_COLOR, label='STN (H)', linewidth=1.5)
+    axes[0].plot(x_pos, h_rates_gpe, 's-', color=GPE_COLOR, label='GPe (H)', linewidth=1.5)
+    axes[0].plot(x_pos, h_rates_gpi, '^-', color=GPI_COLOR, label='GPi (H)', linewidth=1.5)
+    axes[0].plot(x_pos, pd_rates_stn, 'o--', color=STN_COLOR, label='STN (PD)', linewidth=1.5, alpha=0.6)
+    axes[0].plot(x_pos, pd_rates_gpe, 's--', color=GPE_COLOR, label='GPe (PD)', linewidth=1.5, alpha=0.6)
+    axes[0].plot(x_pos, pd_rates_gpi, '^--', color=GPI_COLOR, label='GPi (PD)', linewidth=1.5, alpha=0.6)
+    axes[0].set_xticks(x_pos)
+    axes[0].set_xticklabels(size_labels, rotation=30)
+    axes[0].set_ylabel('Firing Rate (Hz)')
+    axes[0].set_title('A. Firing Rates vs Network Size')
+    axes[0].legend(fontsize=7, ncol=2)
+    axes[0].grid(True, alpha=0.2)
+
+    # Panel B: STN beta vs size
+    axes[1].plot(x_pos, h_beta_stn, 'o-', color=HEALTHY_COLOR, label='Healthy', linewidth=2)
+    axes[1].plot(x_pos, pd_beta_stn, 's-', color=PD_COLOR, label='PD', linewidth=2)
+    axes[1].set_xticks(x_pos)
+    axes[1].set_xticklabels(size_labels, rotation=30)
+    axes[1].set_ylabel('STN Beta Power (%)')
+    axes[1].set_title('B. STN Beta vs Network Size')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.2)
+
+    # Panel C: Wall clock time vs size
+    axes[2].plot(x_pos, h_wall, 'o-', color=HEALTHY_COLOR, label='Healthy', linewidth=2)
+    axes[2].plot(x_pos, pd_wall, 's-', color=PD_COLOR, label='PD', linewidth=2)
+    axes[2].set_xticks(x_pos)
+    axes[2].set_xticklabels(size_labels, rotation=30)
+    axes[2].set_ylabel('Wall Clock Time (s)')
+    axes[2].set_title('C. Simulation Time vs Network Size')
+    axes[2].legend()
+    axes[2].grid(True, alpha=0.2)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/fig8_scaling_invariance.png', dpi=300, bbox_inches='tight')
+    plt.savefig('results/figures/fig8_scaling_invariance.pdf', bbox_inches='tight')
+    plt.close()
+    print("  Fig 8: Scaling invariance")
+
+except FileNotFoundError:
+    print("  Fig 8: SKIPPED (results/validation/scaling_study.pkl not found)")
 
 # =============================================================================
 # SUPPLEMENTARY: Sampler Comparison Convergence
 # =============================================================================
 
-with open('results/validation/sampler_comparison.pkl', 'rb') as f:
-    sc = pickle.load(f)
+try:
+    with open('results/validation/sampler_comparison.pkl', 'rb') as f:
+        sc = pickle.load(f)
 
-fig_s1, ax = plt.subplots(figsize=(8, 5))
-sampler_colors = {'CMA-ES': '#2166AC', 'TPE': '#D6604D', 'Random': '#999999'}
+    fig_s1, ax = plt.subplots(figsize=(8, 5))
+    sampler_colors = {'CMA-ES': '#2166AC', 'TPE': '#D6604D', 'Random': '#999999'}
 
-for sampler in ['CMA-ES', 'TPE', 'Random']:
-    curves = sc['results'][sampler]['convergence_curves']
-    mean_curve = np.mean(curves, axis=0)
-    std_curve = np.std(curves, axis=0)
-    trials = np.arange(1, len(mean_curve) + 1)
-    
-    ax.plot(trials, mean_curve, color=sampler_colors[sampler], linewidth=2, label=f'{sampler} ({mean_curve[-1]:.3f})')
-    ax.fill_between(trials, mean_curve - std_curve, mean_curve + std_curve,
-                     color=sampler_colors[sampler], alpha=0.15)
+    for sampler in ['CMA-ES', 'TPE', 'Random']:
+        curves = sc['results'][sampler]['convergence_curves']
+        mean_curve = np.mean(curves, axis=0)
+        std_curve = np.std(curves, axis=0)
+        trials = np.arange(1, len(mean_curve) + 1)
 
-ax.set_xlabel('Trial')
-ax.set_ylabel('Best Loss')
-ax.set_title('Supplementary: Sampler Convergence (5 seeds, 500 trials)')
-ax.legend()
-ax.grid(True, alpha=0.2)
-ax.set_xlim(1, 500)
+        ax.plot(trials, mean_curve, color=sampler_colors[sampler], linewidth=2,
+                label=f'{sampler} ({mean_curve[-1]:.3f})')
+        ax.fill_between(trials, mean_curve - std_curve, mean_curve + std_curve,
+                         color=sampler_colors[sampler], alpha=0.15)
 
-plt.tight_layout()
-plt.savefig('results/figures/supp_sampler_comparison.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/figures/supp_sampler_comparison.pdf', bbox_inches='tight')
-plt.close()
-print("  Supp: Sampler comparison")
+    ax.set_xlabel('Trial')
+    ax.set_ylabel('Best Loss')
+    ax.set_title('Supplementary: Sampler Convergence (5 seeds, 500 trials)')
+    ax.legend()
+    ax.grid(True, alpha=0.2)
+    ax.set_xlim(1, 500)
+
+    plt.tight_layout()
+    plt.savefig('results/figures/supp_sampler_comparison.png', dpi=300, bbox_inches='tight')
+    plt.savefig('results/figures/supp_sampler_comparison.pdf', bbox_inches='tight')
+    plt.close()
+    print("  Supp: Sampler comparison")
+except FileNotFoundError:
+    print("  Supp: Sampler comparison SKIPPED (file not found)")
 
 # =============================================================================
 # SUPPLEMENTARY: Timestep Sensitivity
 # =============================================================================
 
-with open('results/validation/timestep_sensitivity.pkl', 'rb') as f:
-    ts = pickle.load(f)
+try:
+    with open('results/validation/timestep_sensitivity.pkl', 'rb') as f:
+        ts = pickle.load(f)
 
-fig_s2, axes = plt.subplots(1, 2, figsize=(11, 4))
+    fig_s2, axes = plt.subplots(1, 2, figsize=(11, 4))
+    ts_results = ts['results']
+    dts = sorted(ts_results.keys())
 
-for idx, condition in enumerate(['healthy', 'pd']):
-    data = ts[condition]
-    dts = data['dt_values']
-    
-    ax2 = axes[idx].twinx()
-    
-    axes[idx].plot(dts, data['stn_rates'], 'o-', color=STN_COLOR, label='STN rate')
-    axes[idx].plot(dts, data['gpe_rates'], 's-', color=GPE_COLOR, label='GPe rate')
-    axes[idx].plot(dts, data['gpi_rates'], '^-', color=GPI_COLOR, label='GPi rate')
-    axes[idx].set_xlabel('Timestep (ms)')
-    axes[idx].set_ylabel('Firing Rate (Hz)')
-    axes[idx].set_title(f'{condition.capitalize()}')
-    axes[idx].set_xscale('log')
-    axes[idx].legend(loc='upper left', fontsize=8)
-    axes[idx].grid(True, alpha=0.2)
-    
-    ax2.plot(dts, [b * 100 for b in data['gpe_betas']], 'D--', color='orange', label='GPe β%')
-    ax2.set_ylabel('GPe Beta %')
-    ax2.legend(loc='upper right', fontsize=8)
+    for idx, condition in enumerate(['healthy', 'pd']):
+        stn_rates = [ts_results[dt][condition]['firing_rates']['stn'] for dt in dts]
+        gpe_rates = [ts_results[dt][condition]['firing_rates']['gpe'] for dt in dts]
+        gpi_rates = [ts_results[dt][condition]['firing_rates']['gpi'] for dt in dts]
+        stn_betas = [ts_results[dt][condition]['beta_fraction']['stn'] * 100 for dt in dts]
 
-plt.suptitle('Supplementary: Timestep Sensitivity', fontsize=12, fontweight='bold')
-plt.tight_layout()
-plt.savefig('results/figures/supp_timestep_sensitivity.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/figures/supp_timestep_sensitivity.pdf', bbox_inches='tight')
-plt.close()
-print("  Supp: Timestep sensitivity")
+        ax2 = axes[idx].twinx()
+
+        axes[idx].plot(dts, stn_rates, 'o-', color=STN_COLOR, label='STN rate')
+        axes[idx].plot(dts, gpe_rates, 's-', color=GPE_COLOR, label='GPe rate')
+        axes[idx].plot(dts, gpi_rates, '^-', color=GPI_COLOR, label='GPi rate')
+        axes[idx].set_xlabel('Timestep (ms)')
+        axes[idx].set_ylabel('Firing Rate (Hz)')
+        axes[idx].set_title(f'{condition.capitalize()}')
+        axes[idx].set_xscale('log')
+        axes[idx].legend(loc='upper left', fontsize=8)
+        axes[idx].grid(True, alpha=0.2)
+
+        ax2.plot(dts, stn_betas, 'D--', color='orange', label='STN beta %')
+        ax2.set_ylabel('STN Beta %')
+        ax2.legend(loc='upper right', fontsize=8)
+
+    plt.suptitle('Supplementary: Timestep Sensitivity', fontsize=12, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig('results/figures/supp_timestep_sensitivity.png', dpi=300, bbox_inches='tight')
+    plt.savefig('results/figures/supp_timestep_sensitivity.pdf', bbox_inches='tight')
+    plt.close()
+    print("  Supp: Timestep sensitivity")
+except FileNotFoundError:
+    print("  Supp: Timestep sensitivity SKIPPED (file not found)")
 
 # =============================================================================
 # SUPPLEMENTARY: Performance Scaling
 # =============================================================================
 
-import json
-with open('results/benchmarks/performance_table.json') as f:
-    perf = json.load(f)
+try:
+    with open('results/benchmarks/performance_table.pkl', 'rb') as f:
+        perf = pickle.load(f)
 
-fig_s3, ax = plt.subplots(figsize=(7, 5))
+    fig_s3, ax = plt.subplots(figsize=(9, 5))
 
-jax_neurons = [r['n_total'] for r in perf['jax_results']]
-jax_times = [r['median_s'] for r in perf['jax_results']]
-numpy_time = perf['numpy_baseline']['extrapolated_time_s']
-numpy_neurons = perf['numpy_baseline']['n_total']
+    jax_results_valid = [r for r in perf['jax_results'] if 'error' not in r]
+    jax_neurons = [r['n_total'] for r in jax_results_valid]
+    jax_times = [r['median_s'] for r in jax_results_valid]
+    numpy_time = perf['numpy_baseline']['extrapolated_time_s']
+    numpy_neurons = perf['numpy_baseline']['n_total']
 
-ax.bar([0], [numpy_time], width=0.5, color='#999999', edgecolor='black', label=f'NumPy ({numpy_neurons}n)')
-for i, (n, t) in enumerate(zip(jax_neurons, jax_times)):
-    ax.bar([i + 1], [t], width=0.5, color='#2166AC', edgecolor='black',
-           label=f'JAX ({n}n)' if i == 0 else f'JAX ({n}n)')
-    ax.text(i + 1, t + 5, f'{t:.1f}s', ha='center', fontsize=9)
+    ax.bar([0], [numpy_time], width=0.5, color='#999999', edgecolor='black', label=f'NumPy ({numpy_neurons}n)')
+    for i, (n, t) in enumerate(zip(jax_neurons, jax_times)):
+        ax.bar([i + 1], [t], width=0.5, color='#2166AC', edgecolor='black',
+               label=f'JAX ({n}n)')
+        ax.text(i + 1, t + max(jax_times)*0.03, f'{t:.1f}s', ha='center', fontsize=9)
 
-ax.text(0, numpy_time + 20, f'{numpy_time:.0f}s', ha='center', fontsize=9)
-ax.set_ylabel('Wall Time (seconds)')
-ax.set_title(f'Supplementary: Performance — {numpy_time/jax_times[0]:.0f}× Speedup (JAX vs NumPy at {numpy_neurons}n)')
-ax.set_xticks(range(len(jax_neurons) + 1))
-ax.set_xticklabels([f'NumPy\n{numpy_neurons}n'] + [f'JAX\n{n}n' for n in jax_neurons])
-ax.grid(True, alpha=0.2, axis='y')
+    ax.text(0, numpy_time + max(jax_times)*0.03, f'{numpy_time:.0f}s', ha='center', fontsize=9)
+    ax.set_ylabel('Wall Time (seconds)')
+    if jax_times:
+        speedup_450 = numpy_time / jax_times[0]
+        ax.set_title(f'Supplementary: Performance -- {speedup_450:.0f}x Speedup (JAX vs NumPy at {numpy_neurons}n)')
+    else:
+        ax.set_title('Supplementary: Performance')
+    ax.set_xticks(range(len(jax_neurons) + 1))
+    ax.set_xticklabels([f'NumPy\n{numpy_neurons}n'] + [f'JAX\n{n}n' for n in jax_neurons])
+    ax.grid(True, alpha=0.2, axis='y')
 
-plt.tight_layout()
-plt.savefig('results/figures/supp_performance.png', dpi=300, bbox_inches='tight')
-plt.savefig('results/figures/supp_performance.pdf', bbox_inches='tight')
-plt.close()
-print("  Supp: Performance scaling")
+    plt.tight_layout()
+    plt.savefig('results/figures/supp_performance.png', dpi=300, bbox_inches='tight')
+    plt.savefig('results/figures/supp_performance.pdf', bbox_inches='tight')
+    plt.close()
+    print("  Supp: Performance scaling")
+except FileNotFoundError:
+    print("  Supp: Performance scaling SKIPPED (file not found)")
 
 # =============================================================================
 # DONE
@@ -484,14 +603,15 @@ print("\n" + "=" * 60)
 print("ALL FIGURES GENERATED")
 print("=" * 60)
 print("Main figures:")
-print("  fig1_raster_plots          — Raster: healthy vs PD")
-print("  fig2_power_spectra         — Welch PSD: beta emergence")
-print("  fig3_firing_rates_beta     — Bar charts: rates + beta")
-print("  fig4_network_schematic     — Synaptic ratio changes")
-print("  fig5_lfp_traces            — GPe LFP traces")
-print("  fig6_statistical_validation — (already generated)")
-print("  fig7_dbs_effect             — (already generated)")
+print("  fig1_raster_plots          -- Raster: healthy vs PD (45000n, 100 subsampled)")
+print("  fig2_power_spectra         -- Welch PSD: STN primary, GPe/GPi also shown")
+print("  fig3_firing_rates_beta     -- Bar charts: rates + STN beta")
+print("  fig4_network_schematic     -- Synaptic multipliers with PD/healthy ratios")
+print("  fig5_lfp_traces            -- STN LFP traces (primary beta metric)")
+print("  fig6_statistical_validation -- (generated by run_statistical_validation.py)")
+print("  fig7_dbs_effect             -- (generated by run_dbs_simulation.py)")
+print("  fig8_scaling_invariance     -- Rates, STN beta, wall time vs network size")
 print("Supplementary:")
-print("  supp_sampler_comparison    — CMA-ES vs TPE vs Random")
-print("  supp_timestep_sensitivity  — dt convergence")
-print("  supp_performance           — JAX vs NumPy speedup")
+print("  supp_sampler_comparison    -- CMA-ES vs TPE vs Random")
+print("  supp_timestep_sensitivity  -- dt convergence (STN beta primary)")
+print("  supp_performance           -- JAX vs NumPy speedup")
