@@ -13,8 +13,11 @@ optimization size (100 STN / 200 GPe / 150 GPi):
   STN->GPi: K=30  (was p=0.30 * 100 STN = 30)
   GPe->GPi: K=10  (was p=0.05 * 200 GPe = 10)
 
-No conductance scaling is needed — g_max values are used directly at all
-network sizes because each neuron always receives the same number of inputs.
+The g_max values were originally tuned at a 10/20/15 reference size with
+g_ref = {2.0, 9.0, 2.0, 3.0}. At the 100/200/150 optimization size the
+old scaling formula gave g = g_ref * (N_ref_tuning / N_optimization), so
+the per-synapse conductances are {0.2, 0.9, 0.2, 0.3}. With fixed indegree
+no further scaling is needed — these values are used directly at all sizes.
 """
 
 import jax.numpy as jnp
@@ -32,11 +35,15 @@ K_GPE_STN = 14   # Each STN neuron receives 14 GPe inputs
 K_STN_GPI = 30   # Each GPi neuron receives 30 STN inputs
 K_GPE_GPI = 10   # Each GPi neuron receives 10 GPe inputs
 
-# Reference conductances (tuned at 450-neuron scale, used directly at all sizes)
-G_STN_GPE = 2.0
-G_GPE_STN = 9.0
-G_STN_GPI = 2.0
-G_GPE_GPI = 3.0
+# Per-synapse conductances (g_ref * N_ref_tuning / N_ref_optimization):
+#   g_stn_gpe = 2.0 * (10/100) = 0.2
+#   g_gpe_stn = 9.0 * (20/200) = 0.9
+#   g_stn_gpi = 2.0 * (10/100) = 0.2
+#   g_gpe_gpi = 3.0 * (20/200) = 0.3
+G_STN_GPE = 0.2
+G_GPE_STN = 0.9
+G_STN_GPI = 0.2
+G_GPE_GPI = 0.3
 
 
 def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
