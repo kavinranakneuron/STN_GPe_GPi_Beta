@@ -12,6 +12,7 @@ Author: Kavin Nakkeeran, Johns Hopkins University
 import sys
 sys.path.insert(0, '.')
 
+import gc
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -117,6 +118,10 @@ def benchmark_jax(n_stn, n_gpe, n_gpi):
     median_time = float(np.median(times))
     print(f"    Median: {median_time:.3f}s")
 
+    del obs, state, simulator
+    gc.collect()
+    jax.clear_caches()
+
     return {
         'n_stn': n_stn,
         'n_gpe': n_gpe,
@@ -173,6 +178,10 @@ def benchmark_numpy_baseline():
 
     print(f"    Time ({numpy_steps} steps): {elapsed:.2f}s")
     print(f"    Extrapolated ({N_STEPS} steps): {extrapolated:.1f}s")
+
+    del obs, current_state, state, config
+    gc.collect()
+    jax.clear_caches()
 
     return {
         'n_total': total,

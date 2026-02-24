@@ -13,6 +13,7 @@ Author: Kavin Nakkeeran, Johns Hopkins University
 import sys
 sys.path.insert(0, '.')
 
+import gc
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -117,6 +118,9 @@ if __name__ == "__main__":
         jit_time = time.time() - t0
         print(f"{jit_time:.1f}s")
 
+        del obs
+        gc.collect()
+
         # Run healthy
         print("  Running healthy...", end=" ", flush=True)
         t0 = time.time()
@@ -128,6 +132,10 @@ if __name__ == "__main__":
         metrics_h = compute_all_metrics(obs_h, dt, burn_steps=burn_steps)
         beta_h = compute_beta_fraction_all(obs_h, dt, burn_steps=burn_steps)
 
+        del obs_h
+        gc.collect()
+        jax.clear_caches()
+
         # Run PD
         print("  Running Parkinsonian...", end=" ", flush=True)
         t0 = time.time()
@@ -138,6 +146,10 @@ if __name__ == "__main__":
 
         metrics_pd = compute_all_metrics(obs_pd, dt, burn_steps=burn_steps)
         beta_pd = compute_beta_fraction_all(obs_pd, dt, burn_steps=burn_steps)
+
+        del obs_pd
+        gc.collect()
+        jax.clear_caches()
 
         results[dt] = {
             'healthy': {

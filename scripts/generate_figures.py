@@ -9,6 +9,7 @@ All simulations at 45000 neurons (10000/20000/15000).
 import sys
 sys.path.insert(0, '.')
 
+import gc
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -94,22 +95,71 @@ PD_MULTS = {
     'gpe_gpi': pd_params['g_gpe_gpi_mult'],
 }
 
-# Run simulations
+# ---------------------------------------------------------------------------
+# EXTRACT FIGURE DATA (subsampled numpy) BEFORE DELETING OBS
+# ---------------------------------------------------------------------------
+MAX_NEURONS_RASTER = 100
+MAX_NEURONS_PSD = 500
+
+def extract_figure_data(obs, dt_ms, burn_steps, n_stn, n_gpe, n_gpi):
+    """Extract subsampled spikes, PSDs, and LFP as numpy arrays."""
+    data = {}
+    pop_sizes = {'stn': n_stn, 'gpe': n_gpe, 'gpi': n_gpi}
+
+    for pop in ['stn', 'gpe', 'gpi']:
+        n_n = pop_sizes[pop]
+
+        # Subsampled spikes for rasters (100 neurons, post-burn-in)
+        sub_idx = np.linspace(0, n_n - 1, min(MAX_NEURONS_RASTER, n_n), dtype=int)
+        data[f'spikes_{pop}'] = np.array(obs[f'spikes_{pop}'][burn_steps:][:, sub_idx])
+
+        # LFP from subsampled voltage (500 neurons)
+        V = obs[f'V_{pop}'][burn_steps:]
+        n_neurons = V.shape[1]
+        if n_neurons > MAX_NEURONS_PSD:
+            rng = np.random.default_rng(0)
+            v_idx = rng.choice(n_neurons, size=MAX_NEURONS_PSD, replace=False)
+            v_idx.sort()
+            V = V[:, v_idx]
+        lfp = np.array(jnp.mean(V, axis=1))
+        data[f'lfp_{pop}'] = lfp
+
+        # PSD from LFP
+        fs = 1000.0 / dt_ms
+        nperseg = min(len(lfp), int(fs * 0.5))
+        freqs, psd_arr = welch(lfp, fs=fs, nperseg=nperseg, noverlap=nperseg // 2)
+        data[f'psd_{pop}'] = (freqs, psd_arr)
+
+    return data
+
+# ---------------------------------------------------------------------------
+# RUN SIMULATIONS — extract figure data, then free GPU memory
+# ---------------------------------------------------------------------------
 print("Running healthy simulation...")
 obs_h = simulator(healthy_params, state)
 obs_h['V_stn'].block_until_ready()
 print("  Done.")
+
+metrics_h = compute_all_metrics(obs_h, DT_MS, burn_steps=BURN_STEPS)
+beta_h = compute_beta_fraction_all(obs_h, DT_MS, burn_steps=BURN_STEPS)
+data_h = extract_figure_data(obs_h, DT_MS, BURN_STEPS, N_STN, N_GPE, N_GPI)
+
+del obs_h
+gc.collect()
+jax.clear_caches()
 
 print("Running PD simulation...")
 obs_pd = simulator(pd_params, state)
 obs_pd['V_stn'].block_until_ready()
 print("  Done.")
 
-# Compute metrics
-metrics_h = compute_all_metrics(obs_h, DT_MS, burn_steps=BURN_STEPS)
 metrics_pd = compute_all_metrics(obs_pd, DT_MS, burn_steps=BURN_STEPS)
-beta_h = compute_beta_fraction_all(obs_h, DT_MS, burn_steps=BURN_STEPS)
 beta_pd = compute_beta_fraction_all(obs_pd, DT_MS, burn_steps=BURN_STEPS)
+data_pd = extract_figure_data(obs_pd, DT_MS, BURN_STEPS, N_STN, N_GPE, N_GPI)
+
+del obs_pd
+gc.collect()
+jax.clear_caches()
 
 print(f"\nHealthy: STN={metrics_h['firing_rates']['stn']:.1f} GPe={metrics_h['firing_rates']['gpe']:.1f} "
       f"GPi={metrics_h['firing_rates']['gpi']:.1f} STN beta={beta_h['stn']*100:.1f}%")
@@ -140,23 +190,15 @@ GPI_COLOR = '#2ECC71'
 # HELPERS
 # =============================================================================
 
-def get_spike_times(spikes, dt_ms, burn_steps=4000):
-    spikes_valid = np.array(spikes[burn_steps:])
+def get_spike_times(spikes_np, dt_ms):
+    """Get spike times from a pre-subsampled numpy array (already burn-in trimmed)."""
     times, neurons = [], []
-    for t_idx in range(spikes_valid.shape[0]):
-        spike_neurons = np.where(spikes_valid[t_idx])[0]
+    for t_idx in range(spikes_np.shape[0]):
+        spike_neurons = np.where(spikes_np[t_idx])[0]
         for n in spike_neurons:
             times.append(t_idx * dt_ms)
             neurons.append(n)
     return np.array(times), np.array(neurons)
-
-def compute_psd_welch(V_trace, dt_ms, burn_steps=4000):
-    valid_V = np.array(V_trace[burn_steps:])
-    lfp = np.mean(valid_V, axis=1)
-    fs = 1000.0 / dt_ms
-    nperseg = min(len(lfp), int(fs * 0.5))
-    freqs, psd = welch(lfp, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
-    return freqs, psd
 
 # =============================================================================
 # FIGURE 1: Raster Plots (Healthy vs PD) — subsample to 100 neurons
@@ -167,29 +209,20 @@ fig1, axes = plt.subplots(2, 3, figsize=(14, 7))
 populations = ['stn', 'gpe', 'gpi']
 pop_labels = ['STN', 'GPe', 'GPi']
 pop_colors = [STN_COLOR, GPE_COLOR, GPI_COLOR]
-n_neurons = [N_STN, N_GPE, N_GPI]
 t_win = (0, 250)
-N_DISPLAY = 100  # subsample for display
 
-for col, (pop, label, color, n_n) in enumerate(zip(populations, pop_labels, pop_colors, n_neurons)):
-    subsample = np.linspace(0, n_n-1, min(N_DISPLAY, n_n), dtype=int)
-    for row, (obs, cond, m) in enumerate([
-        (obs_h, 'Healthy', metrics_h),
-        (obs_pd, 'PD', metrics_pd),
+for col, (pop, label, color) in enumerate(zip(populations, pop_labels, pop_colors)):
+    for row, (fig_data, cond, m) in enumerate([
+        (data_h, 'Healthy', metrics_h),
+        (data_pd, 'PD', metrics_pd),
     ]):
-        times, neurons = get_spike_times(obs[f'spikes_{pop}'], DT_MS)
+        times, neurons = get_spike_times(fig_data[f'spikes_{pop}'], DT_MS)
         mask_t = (times >= t_win[0]) & (times <= t_win[1])
-        mask_n = np.isin(neurons, subsample)
 
-        # Remap neuron indices to display indices for clean y-axis
-        neuron_map = {orig: disp for disp, orig in enumerate(subsample)}
-        display_neurons = np.array([neuron_map.get(n, -1) for n in neurons])
-        valid = mask_t & mask_n & (display_neurons >= 0)
-
-        axes[row, col].scatter(times[valid], display_neurons[valid],
+        axes[row, col].scatter(times[mask_t], neurons[mask_t],
                                s=0.3, c=color, alpha=0.6, rasterized=True)
         axes[row, col].set_xlim(*t_win)
-        axes[row, col].set_ylim(0, N_DISPLAY)
+        axes[row, col].set_ylim(0, MAX_NEURONS_RASTER)
         axes[row, col].set_title(f'{label} -- {cond} ({m["firing_rates"][pop]:.1f} Hz)', fontsize=10)
         if col == 0:
             axes[row, col].set_ylabel('Neuron #')
@@ -210,12 +243,12 @@ fig2, axes = plt.subplots(1, 3, figsize=(14, 4))
 psd_labels = ['STN (primary)', 'GPe', 'GPi']
 
 for col, (pop, label) in enumerate(zip(populations, psd_labels)):
-    freqs_h, psd_h = compute_psd_welch(obs_h[f'V_{pop}'], DT_MS)
-    freqs_pd, psd_pd = compute_psd_welch(obs_pd[f'V_{pop}'], DT_MS)
+    freqs_h, psd_h_pop = data_h[f'psd_{pop}']
+    freqs_pd, psd_pd_pop = data_pd[f'psd_{pop}']
     mask = freqs_h <= 60
 
-    axes[col].semilogy(freqs_h[mask], psd_h[mask], color=HEALTHY_COLOR, linewidth=1.5, label='Healthy')
-    axes[col].semilogy(freqs_pd[mask], psd_pd[mask], color=PD_COLOR, linewidth=1.5, label='PD')
+    axes[col].semilogy(freqs_h[mask], psd_h_pop[mask], color=HEALTHY_COLOR, linewidth=1.5, label='Healthy')
+    axes[col].semilogy(freqs_pd[mask], psd_pd_pop[mask], color=PD_COLOR, linewidth=1.5, label='PD')
     axes[col].axvspan(13, 30, alpha=0.15, color=BETA_BAND_COLOR, label='Beta band')
     axes[col].set_xlabel('Frequency (Hz)')
     axes[col].set_ylabel('Power (mV^2/Hz)')
@@ -367,8 +400,8 @@ print("  Fig 4: Network schematic")
 
 fig5, axes = plt.subplots(2, 1, figsize=(12, 5), sharex=True)
 
-lfp_h = np.mean(np.array(obs_h['V_stn'][BURN_STEPS:]), axis=1)
-lfp_pd = np.mean(np.array(obs_pd['V_stn'][BURN_STEPS:]), axis=1)
+lfp_h = data_h['lfp_stn']
+lfp_pd = data_pd['lfp_stn']
 t = np.arange(len(lfp_h)) * DT_MS
 t_win_lfp = (50, 350)
 mask = (t >= t_win_lfp[0]) & (t <= t_win_lfp[1])
