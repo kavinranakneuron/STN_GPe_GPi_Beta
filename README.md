@@ -1,209 +1,113 @@
-# CBGTC Project: JAX-Accelerated Basal Ganglia Network Model
+# GPU-Accelerated Basal Ganglia Network Model for Parkinson's Disease
 
-**Author:** Kavin Nakkeeran  
+**Author:** Kavineshvar Ranak Nakkeeran  
 **Affiliation:** Functional Neurosurgery Lab, Johns Hopkins University  
-**Date:** December 2025
+**Date:** February 2026
 
 ---
 
 ## Overview
 
-A high-performance computational model of the cortico-basal ganglia-thalamo-cortical (CBGTC) circuit for studying Parkinson's disease and deep brain stimulation. The model uses **Hodgkin-Huxley neurons** and achieves **1000x speedup** over traditional Python implementations through JAX GPU acceleration.
-
-### Key Features
-
-- **Biologically realistic**: Rubin-Terman HH neurons with T-type calcium currents for rebound bursting
-- **GPU-accelerated**: JAX JIT compilation enables ~2s simulations for 1800 neurons
-- **Automated optimization**: Optuna + CMA-ES for parameter fitting
-- **Publication-ready**: Reproduces healthy and Parkinsonian firing patterns with beta oscillations
+A JAX-accelerated computational model of the subthalamic nucleus–globus pallidus (STN-GPe-GPi) circuit for studying pathological beta oscillations in Parkinson's disease. The model uses **Hodgkin-Huxley neurons** with **fixed-indegree connectivity** and achieves a **490× speedup** over CPU implementations through GPU acceleration.
 
 ### Main Finding
 
-**Reduced GPe→STN inhibition (82% reduction) is the primary mechanism enabling pathological beta oscillations in Parkinson's disease.**
+Starting from identical baseline connectivity (all synaptic multipliers at 1.0), CMA-ES optimization independently discovered that the Parkinsonian state requires **coordinated synaptic reorganization** — not uniform degradation:
+
+| Pathway | PD/Healthy Ratio | Interpretation |
+|---------|-----------------|----------------|
+| STN→GPe | **2.21×** | Excitation doubles |
+| GPe→STN | **0.11×** | Inhibition collapses (89% loss) |
+| STN→GPi | **1.06×** | Essentially unchanged |
+| GPe→GPi | **1.45×** | Moderate increase |
+
+This pattern — excitatory drive ramping up while the critical inhibitory brake on STN fails — is consistent with known dopamine-dependent plasticity and was discovered without prior constraints on which synapses should change.
+
+### Key Results
+
+- **Scale-invariant dynamics**: Firing rates vary <1 Hz and STN beta power remains ~50% across a 100× network size range (450 to 45,000 neurons)
+- **DBS suppression**: Simulated deep brain stimulation eliminates 100% of pathological STN beta oscillations
+- **Statistical robustness**: All metrics significant at p < 0.001 across 10 independent seeds (45,000 neurons)
+- **Performance**: 490× speedup enables full parameter optimization in ~20 minutes on a single NVIDIA L4 GPU
 
 ---
 
-## Quick Start (No GPU Required!)
+## Quick Start
 
-You don't need a local GPU - just a web browser! Use Google Cloud Platform's free tier or paid GPU instances.
+### Requirements
 
-### Option 1: Google Colab (Free, Limited)
-
-1. Go to [Google Colab](https://colab.research.google.com)
-2. Create new notebook
-3. Runtime → Change runtime type → GPU
-4. Run:
-
-```python
-!git clone https://github.com/neuronlab-cell/cbgtc_project.git
-%cd cbgtc_project
-!pip install jax[cuda12_pip] optuna scipy matplotlib -q
-!python generate_figures.py
-```
-
-### Option 2: Google Cloud Platform (Recommended)
-
-See [Cloud Setup Guide](#cloud-setup-guide) below.
-
----
-
-## Requirements
-
-### Python Version
-- Python 3.9 - 3.11 (tested on 3.10)
-
-### Core Dependencies
-
-```
-jax>=0.4.20
-jaxlib>=0.4.20
-optuna>=3.0.0
-numpy>=1.24.0
-scipy>=1.10.0
-matplotlib>=3.7.0
-```
-
-### For GPU Acceleration (Recommended)
-
-```
-# CUDA 12.x
-jax[cuda12_pip]>=0.4.20
-
-# Or CUDA 11.x
-jax[cuda11_pip]>=0.4.20
-```
+- Python 3.9–3.11
+- NVIDIA GPU with CUDA 12.x (recommended) or CPU-only (slow)
 
 ### Installation
 
 ```bash
-# Clone repository
 git clone https://github.com/neuronlab-cell/cbgtc_project.git
 cd cbgtc_project
-
-# Install dependencies (CPU only)
 pip install -r requirements.txt
 
-# Or with GPU support (CUDA 12)
+# For GPU support (CUDA 12)
 pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-pip install optuna scipy matplotlib
 ```
 
-### requirements.txt
+### Run a simulation
 
-```
-jax>=0.4.20
-jaxlib>=0.4.20
-optuna>=3.0.0
-numpy>=1.24.0
-scipy>=1.10.0
-matplotlib>=3.7.0
+```python
+import sys
+sys.path.insert(0, '.')
+from jax_models.network_builder import build_network_state
+from optimization.sim_jax import create_simulation_fn
+from optimization.metrics_jax import compute_all_metrics
+
+# Build network
+state, config = build_network_state(n_stn=100, n_gpe=200, n_gpi=150, dt_ms=0.025)
+
+# Healthy parameters
+params = {
+    'ISTN': 101.789, 'I_gpe': 2.784, 'I_gpi': 2.261,
+    'noise_stn_sigma': 3.116, 'noise_gpe_sigma': 98.463, 'noise_gpi_sigma': 68.379,
+    'g_stn_gpe_mult': 1.87, 'g_gpe_stn_mult': 1.00,
+    'g_stn_gpi_mult': 1.83, 'g_gpe_gpi_mult': 0.69,
+}
+
+# Simulate and compute metrics
+simulator = create_simulation_fn(config, n_steps=24000)  # 600ms
+obs = simulator(params, state)
+metrics = compute_all_metrics(obs, dt_ms=0.025, burn_steps=4000)
 ```
 
 ---
 
-## Cloud Setup Guide
+## Reproducing Paper Results
 
-### Google Cloud Platform (GCP) Setup
-
-#### Step 1: Create GCP Account
-
-1. Go to [cloud.google.com](https://cloud.google.com)
-2. Sign up (free $300 credit for new users)
-3. Enable billing
-
-#### Step 2: Create GPU VM
-
-**Via Console:**
-
-1. Go to Compute Engine → VM Instances
-2. Click "Create Instance"
-3. Configure:
-   - **Name:** `cbgtc-gpu`
-   - **Region:** `us-central1-a` (good GPU availability)
-   - **Machine type:** `g2-standard-8` (8 vCPU, 32GB RAM)
-   - **GPU:** Add GPU → NVIDIA L4 (1 GPU)
-   - **Boot disk:** 
-     - Click "Change"
-     - Select "Deep Learning on Linux"
-     - Choose "Deep Learning VM with CUDA 12.1"
-     - Size: 100 GB
-   - **Firewall:** Allow HTTP/HTTPS
-
-4. Click "Create"
-
-**Via gcloud CLI:**
+All scripts are in `scripts/`. Run on a GPU instance (GCP with NVIDIA L4 recommended).
 
 ```bash
-gcloud compute instances create cbgtc-gpu \
-    --zone=us-central1-a \
-    --machine-type=g2-standard-8 \
-    --accelerator=type=nvidia-l4,count=1 \
-    --image-family=common-cuda121-debian-11 \
-    --image-project=deeplearning-platform-release \
-    --boot-disk-size=100GB \
-    --maintenance-policy=TERMINATE
+# 1. Optimization (450 neurons, ~30 min total)
+python scripts/run_healthy_optimization.py
+python scripts/run_parkinsonian_optimization.py
+
+# 2. Scaling study (450–45,000 neurons)
+python scripts/run_scaling_study.py
+
+# 3. Statistical validation (45,000 neurons, 10 seeds)
+python scripts/run_statistical_validation.py
+
+# 4. DBS simulation (45,000 neurons)
+python scripts/run_dbs_simulation.py
+
+# 5. Benchmarks and sampler comparison
+python scripts/run_benchmarks.py
+python scripts/run_cmaes_vs_tpe.py
+
+# 6. Timestep sensitivity
+python scripts/run_timestep_sensitivity.py
+
+# 7. Generate all figures
+python scripts/generate_figures.py
 ```
 
-#### Step 3: Connect to VM
-
-```bash
-# SSH via gcloud
-gcloud compute ssh cbgtc-gpu --zone=us-central1-a
-
-# Or use the SSH button in GCP Console
-```
-
-#### Step 4: Setup Environment
-
-```bash
-# Verify GPU
-nvidia-smi
-
-# Clone repository
-git clone https://github.com/neuronlab-cell/cbgtc_project.git
-cd cbgtc_project
-
-# Install JAX with CUDA support
-pip install "jax[cuda12_pip]>=0.4.20" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html --break-system-packages
-
-# Install other dependencies
-pip install optuna scipy matplotlib --break-system-packages
-
-# Verify JAX sees GPU
-python3 -c "import jax; print(jax.devices())"
-# Should output: [cuda(id=0)]
-```
-
-#### Step 5: Run Simulations
-
-```bash
-# Generate all figures
-python3 generate_figures.py
-
-# Run optimization
-python3 optuna_hh_healthy.py
-
-# Run statistical validation
-python3 statistical_validation.py
-```
-
-#### Cost Estimate
-
-| Resource | Cost/Hour | Notes |
-|----------|-----------|-------|
-| g2-standard-8 + L4 GPU | ~$0.70 | US regions |
-| Storage (100GB) | ~$0.04/day | Standard SSD |
-
-**Typical session:** 2-3 hours = ~$2-3
-
-#### Stop VM When Done!
-
-```bash
-# From local terminal
-gcloud compute instances stop cbgtc-gpu --zone=us-central1-a
-
-# Or click "Stop" in GCP Console
-```
+Pre-computed results are included in `results/` so figures can be regenerated without re-running simulations.
 
 ---
 
@@ -211,284 +115,151 @@ gcloud compute instances stop cbgtc-gpu --zone=us-central1-a
 
 ```
 cbgtc_project/
-├── jax_models/                    # Core neural models
-│   ├── __init__.py
-│   ├── stn_jax.py                 # STN Hodgkin-Huxley model
-│   ├── gpe_gpi_hh.py              # Rubin-Terman GPe/GPi model
-│   ├── adex_jax.py                # AdEx model (alternative)
-│   ├── integrator.py              # Network integration
-│   ├── network_builder.py         # Build network with connectivity
-│   ├── synapses_jax.py            # Synaptic dynamics
-│   └── noise_jax.py               # Ornstein-Uhlenbeck noise
+├── jax_models/                          # Core neural models
+│   ├── stn_jax.py                       # STN Hodgkin-Huxley (Gillies & Willshaw 2006)
+│   ├── gpe_gpi_hh.py                    # GPe/GPi Rubin-Terman
+│   ├── network_builder.py               # Fixed-indegree connectivity
+│   ├── synapses_jax.py                  # Sparse conductance-based synapses
+│   ├── integrator.py                    # Network step function
+│   ├── noise_jax.py                     # Ornstein-Uhlenbeck noise
+│   └── observables.py                   # Firing rates, spectral analysis
 │
-├── optimization/                   # Simulation & metrics
-│   ├── sim_jax.py                 # JIT-compiled simulator
-│   └── metrics_jax.py             # Firing rates, CV, beta power
+├── optimization/                        # Optimization infrastructure
+│   ├── sim_jax.py                       # JIT-compiled simulation wrapper
+│   ├── metrics_jax.py                   # Metrics (Welch PSD, CV, rates)
+│   └── optuna_driver.py                 # Optuna CMA-ES driver
 │
-├── results/                        # Output files
-│   ├── fig1_raster_plots.png/pdf
-│   ├── fig2_power_spectra.png/pdf
-│   ├── fig3_firing_rates_beta.png/pdf
-│   ├── fig4_network_schematic.png/pdf
-│   ├── fig5_lfp_traces.png/pdf
-│   ├── fig6_statistical_validation.png/pdf
-│   ├── fig7_dbs_effect.png/pdf
-│   ├── hh_healthy_study.pkl
-│   ├── hh_parkinsonian_beta_study.pkl
-│   └── statistical_validation.pkl
+├── scripts/                             # Reproducibility scripts
+│   ├── run_healthy_optimization.py      # Study 1: 10 params, 500 trials
+│   ├── run_parkinsonian_optimization.py # Study 2: 10 params, 1000 trials
+│   ├── run_scaling_study.py             # Scale invariance (450–45,000n)
+│   ├── run_statistical_validation.py    # 10-seed validation at 45,000n
+│   ├── run_dbs_simulation.py            # DBS beta suppression
+│   ├── run_benchmarks.py                # JAX vs NumPy performance
+│   ├── run_cmaes_vs_tpe.py             # Sampler comparison
+│   ├── run_timestep_sensitivity.py      # Timestep convergence
+│   ├── generate_figures.py              # All paper figures
+│   └── test_scaling_invariance.py       # Indegree verification
 │
-├── docs/                           # Documentation
-│   └── CBGTC_HH_OPTIMIZATION.md
+├── numpy_baseline/                      # CPU reference (for benchmarking)
 │
-├── optuna_hh_healthy.py           # 6-param healthy optimization
-├── optuna_hh_parkinsonian.py      # 10-param PD optimization
-├── generate_figures.py            # Publication figures
-├── statistical_validation.py      # Multi-seed validation
-├── dbs_simulation.py              # DBS proof-of-concept
-├── requirements.txt               # Python dependencies
-└── README.md                      # This file
+├── results/
+│   ├── optimization/                    # Optimized parameters (.pkl)
+│   ├── validation/                      # Scaling, stats, timestep (.pkl, .json)
+│   ├── benchmarks/                      # Performance data (.json)
+│   ├── simulations/                     # DBS results (.pkl)
+│   └── figures/                         # All paper figures (.png, .pdf)
+│
+└── tests/
+    └── test_sim_complete.py
 ```
 
 ---
 
-## Usage Guide
+## Model Details
 
-### Basic Simulation
+### Neuron Models
 
-```python
-import sys
-sys.path.insert(0, '.')
+- **STN**: Modified Hodgkin-Huxley with Na, K, T-type Ca, high-threshold Ca, AHP, leak, and h-current channels. Based on Gillies & Willshaw (2006).
+- **GPe/GPi**: Rubin-Terman formulation with Na, K, T-type Ca, Ca, AHP, and leak channels. Based on Rubin & Terman (2004).
 
-from jax_models.network_builder import build_network_state
-from optimization.sim_jax import create_simulation_fn
-from optimization.metrics_jax import compute_all_metrics, compute_beta_fraction_all
+### Fixed-Indegree Connectivity
 
-# Build network (400 STN, 800 GPe, 600 GPi neurons)
-state, config = build_network_state(
-    n_stn=400, 
-    n_gpe=800, 
-    n_gpi=600, 
-    dt_ms=0.025,      # 0.025ms timestep
-    use_hh=True       # Use Hodgkin-Huxley (vs AdEx)
-)
+Each postsynaptic neuron receives input from a fixed number of presynaptic neurons (indegree K), preserving input statistics across network sizes (Gerstner et al., *Neuronal Dynamics*, Ch. 12.3).
 
-# Create JIT-compiled simulator
-simulator = create_simulation_fn(config, n_steps=16000)  # 400ms
+| Pathway | Type | Indegree (K) | g_syn (mS/cm²) | E_syn (mV) |
+|---------|------|-------------|-----------------|------------|
+| STN→GPe | Excitatory | 15 | 0.2 | 0 |
+| GPe→STN | Inhibitory | 14 | 0.9 | −70 |
+| STN→GPi | Excitatory | 30 | 0.2 | 0 |
+| GPe→GPi | Inhibitory | 10 | 0.3 | −70 |
 
-# Define parameters
-params = {
-    'ISTN': 140.0,           # STN drive current
-    'I_gpe': 3.379,          # GPe applied current
-    'I_gpi': 2.188,          # GPi applied current
-    'noise_stn_sigma': 0.996,
-    'noise_gpe_sigma': 97.760,
-    'noise_gpi_sigma': 69.678,
-}
+### Optimized Parameters
 
-# Run simulation
-obs = simulator(params, state)
-obs['V_stn'].block_until_ready()  # Wait for GPU
+**Healthy state** (baseline):
 
-# Compute metrics
-metrics = compute_all_metrics(obs, dt_ms=0.025, burn_steps=4000)
-beta = compute_beta_fraction_all(obs, dt_ms=0.025, burn_steps=4000)
+| Parameter | Value | Unit |
+|-----------|-------|------|
+| I_STN | 101.789 | µA/cm² |
+| I_GPe | 2.784 | µA/cm² |
+| I_GPi | 2.261 | µA/cm² |
+| g_stn_gpe_mult | 1.87 | × |
+| g_gpe_stn_mult | 1.00 | × |
+| g_stn_gpi_mult | 1.83 | × |
+| g_gpe_gpi_mult | 0.69 | × |
 
-print(f"STN: {metrics['firing_rates']['stn']:.1f} Hz")
-print(f"GPe: {metrics['firing_rates']['gpe']:.1f} Hz")
-print(f"GPe Beta: {beta['gpe']*100:.1f}%")
-```
+**Parkinsonian state**:
 
-### Running Optimization
+| Parameter | Value | Unit | PD/Healthy Ratio |
+|-----------|-------|------|-----------------|
+| I_STN | 61.927 | µA/cm² | — |
+| I_GPe | 0.937 | µA/cm² | — |
+| I_GPi | 1.838 | µA/cm² | — |
+| g_stn_gpe_mult | 4.13 | × | 2.21× |
+| g_gpe_stn_mult | 0.11 | × | **0.11×** |
+| g_stn_gpi_mult | 1.94 | × | 1.06× |
+| g_gpe_gpi_mult | 1.00 | × | 1.45× |
+
+---
+
+## Performance
+
+| Neurons | Backend | Wall Time (s) | Speedup |
+|---------|---------|---------------|---------|
+| 450 | NumPy/CPU | 837.75 | 1.0× (ref) |
+| 450 | JAX/GPU | 1.71 | 490× |
+| 1,800 | JAX/GPU | 1.84 | — |
+| 4,500 | JAX/GPU | 1.89 | — |
+| 15,000 | JAX/GPU | 2.33 | — |
+| 45,000 | JAX/GPU | 3.39 | — |
+
+Hardware: NVIDIA L4 GPU, Google Cloud Platform (g2-standard-8)
+
+---
+
+## Cloud Setup (GCP)
 
 ```bash
-# Healthy state (6 parameters, ~10 min)
-python3 optuna_hh_healthy.py
+# Create GPU VM
+gcloud compute instances create cbgtc-hh \
+    --zone=us-central1-c \
+    --machine-type=g2-standard-8 \
+    --accelerator=type=nvidia-l4,count=1 \
+    --image-family=common-cuda121-debian-11 \
+    --image-project=deeplearning-platform-release \
+    --boot-disk-size=100GB \
+    --maintenance-policy=TERMINATE
 
-# Parkinsonian state (10 parameters, ~20 min)
-python3 optuna_hh_parkinsonian.py
+# Connect
+gcloud compute ssh cbgtc-hh --zone=us-central1-c
+
+# Setup
+git clone https://github.com/neuronlab-cell/cbgtc_project.git
+cd cbgtc_project
+pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html --break-system-packages
+pip install optuna scipy matplotlib --break-system-packages
+
+# Verify GPU
+python3 -c "import jax; print(jax.devices())"  # Should show [cuda(id=0)]
+
+# Stop VM when done (~$0.70/hr)
+gcloud compute instances stop cbgtc-hh --zone=us-central1-c
 ```
-
-### Custom Optuna Study
-
-```python
-import optuna
-from optuna.samplers import CmaEsSampler
-
-def objective(trial):
-    params = {
-        'ISTN': trial.suggest_float('ISTN', 80.0, 200.0),
-        'I_gpe': trial.suggest_float('I_gpe', 1.0, 8.0),
-        'I_gpi': trial.suggest_float('I_gpi', 1.0, 8.0),
-        # ... more parameters
-    }
-    
-    obs = simulator(params, state)
-    metrics = compute_all_metrics(obs, 0.025, burn_steps=4000)
-    
-    # Define loss
-    loss = (metrics['firing_rates']['stn'] - 20.0)**2
-    return loss
-
-study = optuna.create_study(
-    direction='minimize',
-    sampler=CmaEsSampler(seed=42)
-)
-study.optimize(objective, n_trials=500)
-print(study.best_params)
-```
-
-### Generate Figures
-
-```bash
-python3 generate_figures.py
-# Outputs: results/fig1-5.png/pdf
-
-python3 statistical_validation.py
-# Outputs: results/fig6_statistical_validation.png/pdf
-
-python3 dbs_simulation.py
-# Outputs: results/fig7_dbs_effect.png/pdf
-```
-
----
-
-## Key Results
-
-### Healthy vs Parkinsonian (n=10 seeds)
-
-| Metric | Healthy | Parkinsonian | p-value |
-|--------|---------|--------------|---------|
-| STN Rate | 22.6 ± 0.8 Hz | 37.6 ± 0.03 Hz | < 0.0001 |
-| GPe Rate | 66.0 ± 0.1 Hz | 37.5 ± 0.1 Hz | < 0.0001 |
-| GPi Rate | 78.1 ± 0.1 Hz | 90.4 ± 0.1 Hz | < 0.0001 |
-| GPe CV | 0.27 ± 0.00 | 0.40 ± 0.00 | < 0.0001 |
-| **GPe Beta** | **4.6 ± 1.7%** | **10.1 ± 2.7%** | **0.0001** |
-
-### Synaptic Changes in Parkinsonism
-
-| Pathway | Healthy | PD | Change |
-|---------|---------|-----|--------|
-| STN→GPe | 1.0x | 1.59x | +59% |
-| **GPe→STN** | **1.0x** | **0.18x** | **-82%** |
-| STN→GPi | 1.0x | 1.98x | +98% |
-| GPe→GPi | 1.0x | 0.42x | -58% |
-
-### DBS Effect
-
-| Metric | PD (OFF) | PD + DBS | Change |
-|--------|----------|----------|--------|
-| GPe Beta | 11.6% | 7.4% | -36% |
-
----
-
-## Optimized Parameters
-
-### Healthy State
-
-```python
-healthy_params = {
-    'ISTN': 140.0,      # For 1800 neurons (scale-adjusted)
-    'I_gpe': 3.379,
-    'I_gpi': 2.188,
-    'noise_stn_sigma': 0.996,
-    'noise_gpe_sigma': 97.760,
-    'noise_gpi_sigma': 69.678,
-}
-```
-
-### Parkinsonian State
-
-```python
-pd_params = {
-    # Intrinsic parameters
-    'ISTN': 80.0,
-    'I_gpe': 0.672,
-    'I_gpi': 2.430,
-    'noise_stn_sigma': 4.333,
-    'noise_gpe_sigma': 139.364,
-    'noise_gpi_sigma': 109.012,
-    # Synaptic multipliers
-    'g_stn_gpe_mult': 1.592,
-    'g_gpe_stn_mult': 0.182,   # KEY: 82% reduction
-    'g_stn_gpi_mult': 1.975,
-    'g_gpe_gpi_mult': 0.419,
-}
-```
-
----
-
-## Performance Benchmarks
-
-| Network Size | Neurons | Build Time | Sim Time (JIT) | Sim Time (cached) |
-|--------------|---------|------------|----------------|-------------------|
-| Small | 225 | 0.5s | 2.0s | 0.5s |
-| Medium | 450 | 1.2s | 3.0s | 0.6s |
-| Large | 1800 | 4.8s | 5.5s | 2.2s |
-
-**Hardware:** NVIDIA L4 GPU, Google Cloud Platform
 
 ---
 
 ## References
 
-### Model References
-
-- Rubin JE, Terman D (2004). High frequency stimulation of the subthalamic nucleus eliminates pathological thalamic rhythmicity in a computational model. *J Comput Neurosci* 16:211-235.
-- Gillies A, Willshaw D (2006). Membrane channel interactions underlying rat subthalamic projection neuron rhythmic and bursting activity. *J Neurophysiol* 95:2352-2365.
-
-### Experimental Data
-
-- Bergman H, Wichmann T, DeLong MR (1994). Reversal of experimental parkinsonism by lesions of the subthalamic nucleus. *Science* 265:1346-1348.
-- Filion M, Tremblay L (1991). Abnormal spontaneous activity of globus pallidus neurons in monkeys with MPTP-induced parkinsonism. *Brain Res* 547:142-151.
-- Brown P (2003). Oscillatory nature of human basal ganglia activity. *Mov Disord* 18:357-363.
-
-### Software
-
-- Bradbury J, et al. (2018). JAX: composable transformations of Python+NumPy programs.
-- Akiba T, et al. (2019). Optuna: A Next-generation Hyperparameter Optimization Framework. *KDD 2019*.
+- Gillies A, Willshaw D (2006). Membrane channel interactions underlying rat subthalamic projection neuron rhythmic and bursting activity. *J Neurophysiol* 95:2352–2365.
+- Rubin JE, Terman D (2004). High frequency stimulation of the subthalamic nucleus eliminates pathological thalamic rhythmicity in a computational model. *J Comput Neurosci* 16:211–235.
+- Gerstner W, Kistler WM, Naud R, Paninski L (2014). *Neuronal Dynamics: From Single Neurons to Networks and Models of Cognition*. Cambridge University Press.
+- Bergman H, Wichmann T, Karmon B, DeLong MR (1994). The primate subthalamic nucleus. II. Neuronal activity in the MPTP model of parkinsonism. *J Neurophysiol* 72:507–520.
+- Brown P (2003). Oscillatory nature of human basal ganglia activity. *Mov Disord* 18:357–363.
+- Bradbury J et al. (2018). JAX: composable transformations of Python+NumPy programs. https://github.com/google/jax
+- Akiba T et al. (2019). Optuna: A next-generation hyperparameter optimization framework. *KDD 2019*.
 
 ---
 
-## Troubleshooting
+## License
 
-### JAX doesn't see GPU
-
-```bash
-# Check CUDA
-nvidia-smi
-
-# Reinstall JAX with CUDA
-pip uninstall jax jaxlib -y
-pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-# Verify
-python3 -c "import jax; print(jax.devices())"
-```
-
-### NumPy/Matplotlib conflict
-
-```bash
-pip install "numpy<2" --break-system-packages
-# Or
-pip install --upgrade matplotlib --break-system-packages
-```
-
-### Out of GPU memory
-
-Reduce network size:
-
-```python
-# Instead of 1800 neurons
-state, config = build_network_state(100, 200, 150, 0.025, use_hh=True)
-```
-
-### Simulation produces NaN
-
-This is usually due to numerical instability. The current code includes voltage clamping to prevent this. If you modify the model, ensure:
-
-```python
-V_new = jnp.clip(V_new, -100.0, 60.0)
-```
-
-}
-```
+This code accompanies a manuscript currently in preparation. Please contact the author before reuse.
