@@ -1,0 +1,19 @@
+# CBGTC Project Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core JAX (CPU version - for GPU see README.md)
+jax>=0.4.20
+jaxlib>=0.4.20
+
+# Optimization
+optuna>=3.0.0
+
+# Scientific computing
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# For GPU support, install separately:
+# pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
