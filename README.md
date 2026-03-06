@@ -74,6 +74,8 @@ params = {
 simulator = create_simulation_fn(config, n_steps=24000)  # 600ms
 obs = simulator(params, state)
 metrics = compute_all_metrics(obs, dt_ms=0.025, burn_steps=4000)
+for k, v in metrics.items():
+    print(f'{k}: {v}')
 ```
 
 ---
