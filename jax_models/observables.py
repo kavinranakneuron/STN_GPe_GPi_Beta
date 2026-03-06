@@ -1,93 +1,93 @@
 # observables.py
-
 import jax.numpy as jnp
 
-def compute_firing_rates(spikes_dict, dt_ms):
+
+def compute_firing_rates(spikes_dict, dt_ms, burn_steps=0):
     """
     Compute mean firing rates for each population.
     
     Args:
         spikes_dict: {'stn': (n_steps, n_neurons), 'gpe': ..., 'gpi': ...}
-        dt_ms: Timestep
+        dt_ms: Timestep in ms
+        burn_steps: Number of initial steps to discard
         
     Returns:
         rates: {'stn': Hz, 'gpe': Hz, 'gpi': Hz}
     """
     rates = {}
     for pop_name, spike_array in spikes_dict.items():
-        n_steps, n_neurons = spike_array.shape
+        trimmed = spike_array[burn_steps:]
+        n_steps, n_neurons = trimmed.shape
         total_time_sec = (n_steps * dt_ms) / 1000.0
-        total_spikes = jnp.sum(spike_array)
+        total_spikes = jnp.sum(trimmed)
         rates[pop_name] = (total_spikes / n_neurons) / total_time_sec
     return rates
 
 
-def compute_beta_power(V_trace, dt_ms, freq_range=(13, 30)):
+def compute_beta_fraction(V_trace, dt_ms, burn_steps=0, beta_range=(13, 30), broadband_range=(1, 100)):
     """
-    Compute power in beta band using FFT.
+    Compute fractional beta power: beta-band power / total broadband power.
     
     Args:
         V_trace: (n_steps, n_neurons) voltage traces
-        dt_ms: Timestep
-        freq_range: (low, high) Hz
+        dt_ms: Timestep in ms
+        burn_steps: Number of initial steps to discard
+        beta_range: (low, high) Hz for beta band
+        broadband_range: (low, high) Hz for normalization
         
     Returns:
-        beta_power: Scalar power in beta band
+        beta_fraction: Scalar in [0, 1] (multiply by 100 for percentage)
     """
-    # LFP proxy: mean across neurons
-    lfp = jnp.mean(V_trace, axis=1)
+    trimmed = V_trace[burn_steps:]
+    lfp = jnp.mean(trimmed, axis=1)
     
-    # FFT
     fft_vals = jnp.fft.rfft(lfp)
-    freqs = jnp.fft.rfftfreq(len(lfp), d=dt_ms/1000.0)
-    psd = jnp.abs(fft_vals)**2
+    freqs = jnp.fft.rfftfreq(len(lfp), d=dt_ms / 1000.0)
+    psd = jnp.abs(fft_vals) ** 2
     
-    # Extract beta band
-    idx = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    beta_power = jnp.sum(psd[idx])
+    idx_beta = (freqs >= beta_range[0]) & (freqs <= beta_range[1])
+    idx_total = (freqs >= broadband_range[0]) & (freqs <= broadband_range[1])
     
-    return beta_power
+    beta_power = jnp.sum(psd[idx_beta])
+    total_power = jnp.sum(psd[idx_total])
+    
+    return beta_power / jnp.maximum(total_power, 1e-12)
 
 
-def compute_mean_voltage(V_trace):
-    """Mean voltage across time and neurons."""
-    return jnp.mean(V_trace)
+def compute_mean_voltage(V_trace, burn_steps=0):
+    """Mean voltage across time and neurons (after burn-in)."""
+    return jnp.mean(V_trace[burn_steps:])
 
 
-def compute_all_metrics(observables_dict, dt_ms):
+def compute_all_metrics(observables_dict, dt_ms, burn_steps=4000):
     """
-    Convenience function to compute all metrics at once.
+    Compute all metrics at once with burn-in trimming.
     
     Args:
-        observables_dict: Output from simulation with keys like:
+        observables_dict: Output from simulation with keys:
             'V_stn', 'V_gpe', 'V_gpi', 'spikes_stn', 'spikes_gpe', 'spikes_gpi'
-        dt_ms: Timestep
+        dt_ms: Timestep in ms
+        burn_steps: Number of initial steps to discard (default 4000 = 100ms at dt=0.025ms)
         
     Returns:
-        metrics: Dict with firing_rates, beta_powers, mean_voltages
+        metrics: Dict with firing_rates, beta_fraction, mean_V
     """
-    # Firing rates
     spikes = {
         'stn': observables_dict['spikes_stn'],
         'gpe': observables_dict['spikes_gpe'],
-        'gpi': observables_dict['spikes_gpi']
+        'gpi': observables_dict['spikes_gpi'],
     }
-    firing_rates = compute_firing_rates(spikes, dt_ms)
+    firing_rates = compute_firing_rates(spikes, dt_ms, burn_steps=burn_steps)
     
-    # Beta power (per population)
-    beta_stn = compute_beta_power(observables_dict['V_stn'], dt_ms)
-    beta_gpe = compute_beta_power(observables_dict['V_gpe'], dt_ms)
-    beta_gpi = compute_beta_power(observables_dict['V_gpi'], dt_ms)
-    
-    # Mean voltages
-    mean_V = {
-        'stn': compute_mean_voltage(observables_dict['V_stn']),
-        'gpe': compute_mean_voltage(observables_dict['V_gpe']),
-        'gpi': compute_mean_voltage(observables_dict['V_gpi'])
-    }
+    beta_fraction = {}
+    mean_V = {}
+    for pop in ['stn', 'gpe', 'gpi']:
+        V = observables_dict[f'V_{pop}']
+        beta_fraction[pop] = compute_beta_fraction(V, dt_ms, burn_steps=burn_steps)
+        mean_V[pop] = compute_mean_voltage(V, burn_steps=burn_steps)
     
     return {
         'firing_rates': firing_rates,
-        'beta_power': {'stn': beta_stn, 'gpe': beta_gpe, 'gpi': beta_gpi},
-        'mean_V': mean_V
+        'beta_fraction': beta_fraction,
+        'mean_V': mean_V,
     }
