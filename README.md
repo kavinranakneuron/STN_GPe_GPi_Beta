@@ -42,7 +42,7 @@ This pattern — excitatory drive ramping up while the critical inhibitory brake
 ### Installation
 
 ```bash
-git clone https://github.com/neuronlab-cell/cbgtc_project.git
+git clone https://github.com/neuronlab-cell/STN_GPe_GPi_Beta.git
 cd cbgtc_project
 pip install -r requirements.txt
 
