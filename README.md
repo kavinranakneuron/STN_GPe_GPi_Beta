@@ -53,37 +53,25 @@ pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax
 ### Run a simulation
 
 ```python
-import sys
-sys.path.insert(0, '.')
+python3 -c "
+import sys; sys.path.insert(0, '.')
 from jax_models.network_builder import build_network_state
 from optimization.sim_jax import create_simulation_fn
-from optimization.metrics_jax import compute_all_metrics
+from jax_models.observables import compute_all_metrics
 
-# Build network
 state, config = build_network_state(n_stn=100, n_gpe=200, n_gpi=150, dt_ms=0.025)
-
-# Healthy parameters
 params = {
     'ISTN': 101.789, 'I_gpe': 2.784, 'I_gpi': 2.261,
     'noise_stn_sigma': 3.116, 'noise_gpe_sigma': 98.463, 'noise_gpi_sigma': 68.379,
     'g_stn_gpe_mult': 1.87, 'g_gpe_stn_mult': 1.00,
     'g_stn_gpi_mult': 1.83, 'g_gpe_gpi_mult': 0.69,
 }
-
-# Simulate and compute metrics
-simulator = create_simulation_fn(config, n_steps=24000)  # 600ms
+simulator = create_simulation_fn(config, n_steps=24000)
 obs = simulator(params, state)
-metrics = compute_all_metrics(obs, dt_ms=0.025, burn_steps=4000)
-
-print('=== Firing Rates ===')
-for k, v in metrics['firing_rates'].items():
-    print(f'  {k}: {float(v):.1f} Hz')
-print('=== Beta Fraction ===')
-for k, v in metrics['beta_power'].items():
-    print(f'  {k}: {float(v)*100:.1f}%')
-print('=== Mean Voltage ===')
-for k, v in metrics['mean_V'].items():
-    print(f'  {k}: {float(v):.1f} mV')
+m = compute_all_metrics(obs, dt_ms=0.025, burn_steps=4000)
+for pop in ['stn', 'gpe', 'gpi']:
+    print(f'{pop}: {float(m[\"firing_rates\"][pop]):.1f} Hz, beta={float(m[\"beta_fraction\"][pop])*100:.1f}%') 
+"
 ```
 
 ---
