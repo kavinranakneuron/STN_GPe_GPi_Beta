@@ -260,6 +260,6 @@ gcloud compute instances stop cbgtc-hh --zone=us-central1-c
 
 ---
 
-## License
+## AI Assistance Disclosure
 
-This code accompanies a manuscript currently in preparation. Please contact the author before reuse.
+Generative AI tools (Claude, Anthropic) were used to assist with code documentation, manuscript formatting, and readability improvements. All computational model design, simulation execution, data analysis, and scientific interpretation were performed by the authors. No AI tools were used to generate simulations, run experiments, or produce scientific conclusions.
