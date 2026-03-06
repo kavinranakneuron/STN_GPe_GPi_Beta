@@ -74,8 +74,16 @@ params = {
 simulator = create_simulation_fn(config, n_steps=24000)  # 600ms
 obs = simulator(params, state)
 metrics = compute_all_metrics(obs, dt_ms=0.025, burn_steps=4000)
-for k, v in metrics.items():
-    print(f'{k}: {v}')
+
+print('=== Firing Rates ===')
+for k, v in metrics['firing_rates'].items():
+    print(f'  {k}: {float(v):.1f} Hz')
+print('=== Beta Fraction ===')
+for k, v in metrics['beta_power'].items():
+    print(f'  {k}: {float(v)*100:.1f}%')
+print('=== Mean Voltage ===')
+for k, v in metrics['mean_V'].items():
+    print(f'  {k}: {float(v):.1f} mV')
 ```
 
 ---
