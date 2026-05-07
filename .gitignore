@@ -1,4 +1,28 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-results/simulations/traces_*.pkl
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+bgnet-env/
+venv/
+.venv/
+
+# Results — generated, often large
+results/
+!results/.gitkeep
+
+# JAX cache
+.jax_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
