@@ -26,11 +26,20 @@ def test_dt_halving_within_2_hz():
     OU sampling variance does not dominate the comparison; with stronger
     noise the same-seed-different-dt OU realizations decorrelate enough
     that even an exact integrator would show several-Hz drift on a 200 ms
-    window."""
+    window.
+
+    Drives are reduced from the Phase 1 values: the Terman-Rubin 2002 STN
+    fires ~10 Hz spontaneously, so I_drive_stn=5 + mu_stn=3 (Phase 1's
+    settings) pushed the network into a regime where GPi was sensitive
+    enough to dt-discretization that even the deterministic dt error
+    exceeded 2 Hz. Moderate drives keep all populations in physiological
+    range (STN ~3 Hz, GPe ~80 Hz, GPi ~25 Hz here) where forward Euler at
+    dt=0.025 ms is well-behaved.
+    """
     cfg = NetworkConfig(
         n_stn=100, n_gpe=200, n_gpi=150,
-        I_drive_stn=5.0, mu_stn=3.0, sigma_stn=1.0,
-        I_drive_gpe=2.0, mu_gpe=1.0, sigma_gpe=1.0,
+        I_drive_stn=2.0, mu_stn=0.0, sigma_stn=1.0,
+        I_drive_gpe=2.0, mu_gpe=0.0, sigma_gpe=1.0,
         I_drive_gpi=0.0, mu_gpi=0.0, sigma_gpi=1.0,
         ou_seed=11,
     )
