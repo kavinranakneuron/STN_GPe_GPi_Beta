@@ -12,22 +12,28 @@ with optimization default 100/200/150 = 450 neurons and validation default
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from bgnet.connectivity import build_connectivity
-from bgnet.integrator import (CircularBuffer, NetworkState, StaticParams,
-                              SynapseState, buffer_init, make_run)
-from bgnet.neurons.pallidum import (PallidumState, gpe_params, gpi_params,
-                                    initial_state as pallidum_init)
-from bgnet.neurons.stn import (STNParams, STNState,
-                               initial_state as stn_init)
-from bgnet.noise import OUParams, init_state as ou_init
-from bgnet.synapses import (ampa_params, gaba_a_params, peak_normalization)
+from bgnet.integrator import (
+    NetworkState,
+    StaticParams,
+    SynapseState,
+    buffer_init,
+    make_run,
+)
+from bgnet.neurons.pallidum import gpe_params, gpi_params
+from bgnet.neurons.pallidum import initial_state as pallidum_init
+from bgnet.neurons.stn import STNParams
+from bgnet.neurons.stn import initial_state as stn_init
+from bgnet.noise import OUParams
+from bgnet.noise import init_state as ou_init
+from bgnet.synapses import ampa_params, gaba_a_params, peak_normalization
 
 
 @dataclass

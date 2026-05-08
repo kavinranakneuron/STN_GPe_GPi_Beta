@@ -30,13 +30,10 @@ import jax
 import jax.numpy as jnp
 
 from bgnet.connectivity import Connectivity, gather_input
-from bgnet.neurons.pallidum import (PallidumParams, PallidumState,
-                                    pallidum_step_vmap)
+from bgnet.neurons.pallidum import PallidumParams, PallidumState, pallidum_step_vmap
 from bgnet.neurons.stn import STNParams, STNState, stn_step_vmap
 from bgnet.noise import OUParams, ou_step
-from bgnet.synapses import (SynapseParams, peak_normalization,
-                            synapse_step, synaptic_current)
-
+from bgnet.synapses import SynapseParams, synapse_step, synaptic_current
 
 # ---------------------------------------------------------------------------
 # Aggregated state

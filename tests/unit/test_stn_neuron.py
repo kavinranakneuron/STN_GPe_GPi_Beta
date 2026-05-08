@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-import pytest
 
 from bgnet.neurons.stn import STNParams, initial_state, stn_step
 

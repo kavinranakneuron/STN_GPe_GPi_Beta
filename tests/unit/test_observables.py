@@ -6,5 +6,4 @@ here once bgnet/observables.py is implemented.
 """
 import pytest
 
-
 pytest.skip("observables module belongs to Phase 2", allow_module_level=True)

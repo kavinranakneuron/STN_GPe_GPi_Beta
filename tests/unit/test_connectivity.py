@@ -1,10 +1,10 @@
 """Unit tests for fixed-indegree connectivity."""
 from __future__ import annotations
 
+import jax.numpy as jnp
 import numpy as np
 
 from bgnet.connectivity import build_connectivity, gather_input
-import jax.numpy as jnp
 
 
 def _check_indegree(n_pre, n_post, K):

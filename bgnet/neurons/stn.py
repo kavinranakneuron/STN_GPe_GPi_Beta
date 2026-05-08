@@ -52,7 +52,6 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
-
 # ---------------------------------------------------------------------------
 # Parameters and state containers
 # ---------------------------------------------------------------------------

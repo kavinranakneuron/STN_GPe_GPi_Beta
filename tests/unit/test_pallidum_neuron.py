@@ -4,8 +4,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from bgnet.neurons.pallidum import (gpe_params, gpi_params, initial_state,
-                                    pallidum_step)
+from bgnet.neurons.pallidum import gpe_params, gpi_params, initial_state, pallidum_step
 
 
 def _run_isolated(p, I_drive: float, T_ms: float = 1200.0,

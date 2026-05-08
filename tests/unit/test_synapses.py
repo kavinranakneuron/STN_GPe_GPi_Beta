@@ -5,9 +5,14 @@ import math
 
 import jax.numpy as jnp
 
-from bgnet.synapses import (ampa_params, gaba_a_params, init_state,
-                            peak_normalization, synapse_step,
-                            synaptic_current)
+from bgnet.synapses import (
+    ampa_params,
+    gaba_a_params,
+    init_state,
+    peak_normalization,
+    synapse_step,
+    synaptic_current,
+)
 
 
 def _impulse_response(p, g_max=1.0, dt=0.025, T=80.0):
@@ -58,7 +63,8 @@ def test_synaptic_current_sign_convention():
     membrane equation -I_syn convention)."""
     p = ampa_params()
     norm = peak_normalization(p.tau_rise_ms, p.tau_decay_ms)
-    x = jnp.array([1.0]); y = jnp.array([0.0])  # arbitrary positive g_syn
+    x = jnp.array([1.0])
+    y = jnp.array([0.0])  # arbitrary positive g_syn
     V = jnp.array([10.0])  # above E_syn = 0
     I = synaptic_current(x, y, V, p, norm)
     assert float(I[0]) > 0, "I_syn should be positive when V > E_syn"

@@ -60,7 +60,8 @@ def test_autocorr_at_lag_tau_is_one_over_e():
         return Is
 
     Is = run(I0, key)[int(50 / dt):, 0]
-    mean = jnp.mean(Is); var = jnp.var(Is)
+    mean = jnp.mean(Is)
+    var = jnp.var(Is)
     lag = int(p.tau_ms / dt)
     ac = jnp.mean((Is[:-lag] - mean) * (Is[lag:] - mean)) / var
     assert abs(float(ac) - jnp.exp(-1.0)) < 0.05, f"autocorr at tau: {float(ac)}"

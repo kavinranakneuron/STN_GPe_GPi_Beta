@@ -45,4 +45,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-ignore = ["E501"]
+# E741: ambiguous name `I`/`l` -- `I` is the canonical neuroscience symbol
+# for current density throughout this codebase, and renaming it would
+# obscure the math.
+ignore = ["E501", "E741"]
