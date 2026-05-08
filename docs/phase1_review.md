@@ -120,3 +120,33 @@ window, where the residual difference is sub-2-Hz.
   on top of this.
 - Make-run cache means trial-to-trial cost is just one GPU pass; no
   per-trial recompilation.
+
+## Resolution: STN model swap
+
+Decision (May 2026): replaced the GW-inspired single-compartment STN with
+the canonical Terman-Rubin 2002 STN model (`episodic.ode` parameters,
+ModelDB 182758). The GW headroom problem (silent at I = 0, ~11 Hz at
+I = 42 µA/cm²) is resolved — RT 2002 fires ~10 Hz tonically at I = 0 and
+hits the healthy 20 Hz target at I_drive ≈ 5 µA/cm², comfortably inside
+the optimizer's deterministic envelope of [-10, +10] µA/cm². RT 2002 is
+single-compartment by design (not a multi-compartment collapse), shares
+its model lineage with the Rubin-Terman 2004 GPe/GPi neurons already in
+use, and is well-precedented in the STN-GPe oscillation literature.
+
+Implementation: `bgnet/neurons/stn.py`. Tests: `tests/unit/test_stn_neuron.py`
+(six tests covering tonic firing rate, f-I monotonicity, post-inhibitory
+rebound, calcium-AHP adaptation, dt sensitivity, and bounds/NaN hygiene).
+Validation document with f-I curve, GW-vs-RT comparison plot, rebound
+trace, adaptation trace, and dt sensitivity table: `docs/stn_validation.md`.
+
+One implementation discrepancy with the instructions: PHASE_1_5_INSTRUCTIONS.md
+writes `I_Ca = g_Ca * sinf(V)^2 * (V - E_Ca)`. The literal `s^2` form fires
+~2.7 Hz spontaneously, well below the canonical RT 2002 ~10 Hz. The linear
+form `I_Ca = g_Ca * sinf(V) * (V - E_Ca)` recovers the canonical rate, so
+that is what `bgnet/neurons/stn.py` implements (per the instruction's
+"XPP source wins" directive). Inline-commented at the I_Ca expression and
+called out in the module docstring and the Phase 1.5 commit message.
+
+The Phase 1 review notes above are preserved unchanged — the headroom
+analysis is the reason for the swap and should remain visible in the
+project history.

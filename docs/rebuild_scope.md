@@ -137,7 +137,7 @@ Trial counts: **1000 per optimization run as standard, 1500 for headline runs.**
 
 #### 2.2.8 Models
 
-- **STN:** single-compartment Hodgkin-Huxley neuron, conductances inspired by Gillies and Willshaw (2006), tuned for STN-like firing characteristics (rate, CV, post-inhibitory rebound). Honestly framed: the original Gillies-Willshaw model is multi-compartmental, with T-type Ca²⁺ current preferentially distributed in dendrites. We use a single-compartment approximation because the framework's contribution is methodological, not biophysical, and a multi-compartment STN would significantly impact GPU speedup. The simplification is documented and discussed.
+- **STN:** single-compartment Hodgkin-Huxley neuron from Terman, Rubin, Yew, and Wilson (2002). The canonical model from this lineage is single-compartment by design (not a collapse from multi-compartment), and is the foundational model for STN–GPe oscillation studies; Rubin and Terman (2004) — used unchanged for the GPe and GPi cells in this rebuild — builds directly on it. Parameters from the `episodic.ode` source distributed with the paper (ModelDB accession 182758) are used as the healthy-state ground truth; full parameter table and validation in `docs/stn_validation.md`. The Gillies–Willshaw (2006) model was initially considered for greater biophysical detail (h-current, dendritic T-current) but, when collapsed to a single compartment, produces a near-silent f-I curve at the drive levels accessible to the optimizer's bounded search space (~11 Hz at I_drive = 42 µA/cm²; see `docs/phase1_review.md`). Terman–Rubin gives a comfortable f-I regime (~10 Hz tonic at I = 0, ~20 Hz at I = 5 µA/cm²) appropriate for a methods-paper demonstration.
 - **GPe and GPi:** Rubin-Terman single-compartment formalism (Rubin and Terman, 2004), unchanged in structure. These models were designed as point neurons.
 - **Numerical integration:** forward Euler, dt = 0.025 ms. Validated against dt = 0.0125 ms.
 - **Connectivity:** fixed-indegree, K_STN→GPe = 15, K_GPe→STN = 14, K_STN→GPi = 30, K_GPe→GPi = 10. Justification: Gerstner et al. (2014) recommend this scheme for networks intended to generalize across sizes, since fixed-probability connectivity loses fluctuation-driven dynamics in large networks (variance scales as 1/√N).
@@ -308,6 +308,8 @@ Soares, J., Kliem, M. A., Betarbet, R., Greenamyre, J. T., Yamamoto, B., and Wic
 Stein, E., and Bar-Gad, I. (2013). β oscillations in the cortico-basal ganglia loop during parkinsonism. *Experimental Neurology*, 245, 52–59.
 
 Tachibana, Y., Iwamuro, H., Kita, H., Takada, M., and Nambu, A. (2014). Mechanism of parkinsonian neuronal oscillations in the primate basal ganglia: some considerations based on our recent work. *Frontiers in Systems Neuroscience*, 8, 74.
+
+Terman, D., Rubin, J. E., Yew, A. C., and Wilson, C. J. (2002). Activity patterns in a model for the subthalamopallidal network of the basal ganglia. *Journal of Neuroscience*, 22(7), 2963–2976.
 
 Vich, C. et al. (2023). CBGTPy: An extensible cortico-basal ganglia-thalamic framework for modeling biological decision making. *bioRxiv* 2023.09.05.556301.
 

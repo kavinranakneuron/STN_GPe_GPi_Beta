@@ -138,7 +138,7 @@ Six phases. Each has explicit entry conditions, deliverables, and exit condition
 
 1. **Set up the repository skeleton.** Create the layout in §2. Move existing `jax_models/`, `optimization/`, `numpy_baseline/` to `legacy/`. Set up `pyproject.toml` with `bgnet` as the package name. Dependencies: `jax`, `jaxlib`, `optuna`, `cma`, `numpy`, `scipy`, `pyyaml`, `matplotlib`, `pytest`. Add `pytest`, `ruff` as dev dependencies.
 
-2. **Implement STN neuron** (`bgnet/neurons/stn.py`). Single-compartment Hodgkin-Huxley, conductances inspired by Gillies & Willshaw (2006) but tuned for single-compartment behavior. Currents: I_Na, I_K, I_L, I_T, I_CaH, I_AHP, I_H. Membrane equation: `C_m dV/dt = -I_Na - I_K - I_L - I_T - I_CaH - I_AHP - I_H - I_syn + I_drive + I_noise`. C_m = 1.0 µF/cm². Spike detection: upward crossing of 0 mV with 2 ms minimum ISI. All conductances and currents in current-density units. Document each conductance value's source in a comment block at the top.
+2. **Implement STN neuron** (`bgnet/neurons/stn.py`). Single-compartment Hodgkin-Huxley from Terman, Rubin, Yew & Wilson (2002), parameters from the canonical `episodic.ode` source (ModelDB 182758). Currents: I_L, I_Na, I_K, I_AHP, I_Ca, I_T (the canonical RT 2002 set — no I_H, no separate I_CaH; m, s, and a are instantaneous). Membrane equation: `C_m dV/dt = -(I_L + I_Na + I_K + I_AHP + I_Ca + I_T) - I_syn + I_drive + I_noise`. C_m = 1.0 µF/cm². Spike detection: upward crossing of 0 mV with 2 ms minimum ISI. All conductances and currents in current-density units. Validation in `docs/stn_validation.md`. Note: the original Phase 1 plan called for a Gillies–Willshaw-inspired STN; Phase 1.5 replaced it with the RT 2002 model after the GW f-I curve proved silent at the optimizer's drive bounds (see `docs/phase1_review.md`).
 
 3. **Implement Pallidum neurons** (`bgnet/neurons/pallidum.py`). Rubin-Terman formalism (Rubin & Terman, 2004). Single function with parameters that differ between GPe and GPi (g_T, g_AHP, baseline I_app). Currents: I_Na, I_K, I_L, I_T, I_Ca, I_AHP. Spike detection: upward crossing of -20 mV. Reference values from Ebert et al. (2014) Tables 1–2.
 
@@ -514,7 +514,8 @@ When you reference biological values in code comments or YAML configs, use these
 - Stein & Bar-Gad 2013: `# Stein & Bar-Gad 2013, Exp Neurol 245:52-59`
 - Devergnas et al. 2014: `# Devergnas et al. 2014, Neurobiol Dis 68:156-166`
 - Rubin & Terman 2004: `# Rubin & Terman 2004, J Comput Neurosci 16(3):211-235`
-- Gillies & Willshaw 2006: `# Gillies & Willshaw 2006, J Neurophysiol 95(4):2352-2365`
+- Terman et al. 2002: `# Terman et al. 2002, J Neurosci 22:2963-2976`
+- Gillies & Willshaw 2006: `# Gillies & Willshaw 2006, J Neurophysiol 95(4):2352-2365` (considered but not used; see Phase 1.5)
 - Ebert et al. 2014: `# Ebert et al. 2014, Front Comput Neurosci 8:154`
 - Gerstner et al. 2014: `# Gerstner et al. 2014, Neuronal Dynamics, Cambridge UP, Ch 12.3`
 - Hansen 2016: `# Hansen 2016, arXiv:1604.00772 (CMA-ES tutorial)`
