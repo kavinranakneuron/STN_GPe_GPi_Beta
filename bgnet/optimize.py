@@ -136,10 +136,18 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
     ``scripts/01_run_healthy_optimization.py`` and
     ``scripts/02_run_pd_optimization.py`` (the latter just passes a
     different config).
+
+    Constraint handling. AGENTS.md asked for ``CmaEsSampler(constraints_func=...)``
+    but Optuna 4.x's ``CmaEsSampler`` does not accept ``constraints_func``
+    (only multi-objective samplers like NSGA-II / TPE do). When the config
+    requests ``constraint_mode="constraint"`` we attempt the constraint API
+    and fall back to the penalty formulation (AGENTS.md §3 Phase 2 step 3
+    explicit fallback) if that signature is not available. The summary
+    records both the *requested* and *effective* mode.
     """
     logger = logging.getLogger("bgnet.optimize")
     targets = _targets_from_cfg(cfg)
-    use_constraint = cfg.constraint_mode == "constraint"
+    requested_mode = cfg.constraint_mode
 
     sampler_kwargs: dict[str, Any] = {
         "seed": cfg.cma_seed,
@@ -147,9 +155,26 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
         "x0": _initial_mean(cfg),
         "sigma0": 0.25,                # 1/4 of normalized [0,1] range
     }
-    if use_constraint:
-        sampler_kwargs["constraints_func"] = _read_constraint
-    sampler = CmaEsSampler(**sampler_kwargs)
+
+    effective_mode = requested_mode
+    if requested_mode == "constraint":
+        try:
+            sampler = CmaEsSampler(**sampler_kwargs,
+                                   constraints_func=_read_constraint)
+            logger.info("CmaEsSampler engaged with constraints_func; "
+                        "constraint mode active.")
+        except TypeError:
+            logger.warning(
+                "Optuna %s CmaEsSampler does not accept constraints_func; "
+                "falling back to penalty formulation (AGENTS.md §3 Phase 2 "
+                "step 3 explicit fallback). Trials still record c_beta on "
+                "user_attrs so feasibility is filtered post-hoc.",
+                optuna.__version__,
+            )
+            sampler = CmaEsSampler(**sampler_kwargs)
+            effective_mode = "penalty"
+    else:
+        sampler = CmaEsSampler(**sampler_kwargs)
 
     study = optuna.create_study(
         direction="minimize",
@@ -191,7 +216,7 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
         trial.set_user_attr("constraint", (float(c),))
         trial.set_user_attr("feasible", bool(feasible))
 
-        if use_constraint:
+        if effective_mode == "constraint":
             l = loss(metrics, targets, cfg.w_rate, cfg.w_cv)
         else:
             l = loss_with_beta_penalty(metrics, targets,
@@ -199,7 +224,7 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
                                        cfg.beta_penalty_weight)
 
         if (trial.number + 1) % progress_log_every == 0:
-            best = best_feasible_loss(study, use_constraint)
+            best = best_feasible_loss(study)
             logger.info(
                 "trial %4d/%d  loss=%.4f  c_beta=%+.4f  feasible=%s  "
                 "best_feasible=%.4f  rates=(%.1f, %.1f, %.1f) Hz  beta=%.3f",
@@ -216,7 +241,7 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
     elapsed = time.time() - t0
 
     summary = _summarize(study, cfg, n_complete, n_feasible, n_infeasible,
-                         n_failed, elapsed, use_constraint)
+                         n_failed, elapsed, effective_mode, requested_mode)
     run_dir.results_pkl.write_bytes(pickle.dumps(summary))
     return summary
 
@@ -225,9 +250,12 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
 # Result post-processing
 # ---------------------------------------------------------------------------
 
-def best_feasible_loss(study: optuna.Study, use_constraint: bool
-                       ) -> float | None:
-    """Return the best loss among feasible completed trials, or None."""
+def best_feasible_loss(study: optuna.Study) -> float | None:
+    """Return the best loss among feasible completed trials, or None.
+
+    Reads the per-trial ``feasible`` user-attr written by the objective
+    closure in ``run_study``.
+    """
     best = None
     for t in study.trials:
         if t.state != TrialState.COMPLETE:
@@ -241,7 +269,8 @@ def best_feasible_loss(study: optuna.Study, use_constraint: bool
 
 def _summarize(study: optuna.Study, cfg: StudyConfig, n_complete: int,
                n_feasible: int, n_infeasible: int, n_failed: int,
-               elapsed: float, use_constraint: bool) -> dict[str, Any]:
+               elapsed: float, effective_mode: str,
+               requested_mode: str) -> dict[str, Any]:
     """Build the dict that is pickled to results.pkl."""
     feasible_trials = [t for t in study.trials
                        if t.state == TrialState.COMPLETE
@@ -269,8 +298,8 @@ def _summarize(study: optuna.Study, cfg: StudyConfig, n_complete: int,
         "n_failed": n_failed,
         "feasibility_rate": (n_feasible / n_complete) if n_complete else 0.0,
         "wall_clock_s": elapsed,
-        "constraint_mode": cfg.constraint_mode,
-        "use_constraint_api": use_constraint,
+        "constraint_mode_requested": requested_mode,
+        "constraint_mode_effective": effective_mode,
         "best_loss_feasible": (
             best.value if best and best.user_attrs.get("feasible", False)
             else None
