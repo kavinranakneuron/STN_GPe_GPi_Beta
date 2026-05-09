@@ -1,0 +1,50 @@
+# Healthy SMOKE config — short run for Phase 2 step 8.
+#
+# Same network and bounds as healthy.yaml but only 100 trials and
+# 200 ms simulation per trial (with 50 ms burn-in). Used to verify the
+# end-to-end wiring and to surface the constraint-formulation result
+# (working vs fallback) before any real optimization.
+
+name: healthy_smoke
+condition: healthy
+
+target_rate_stn_Hz: 20.0
+target_rate_gpe_Hz: 65.0
+target_rate_gpi_Hz: 67.0
+target_cv_stn: 0.4
+target_cv_gpe: 0.35
+target_cv_gpi: 0.20
+beta_threshold: 0.05
+
+n_stn: 100
+n_gpe: 200
+n_gpi: 150
+
+dt_ms: 0.025
+duration_ms: 200.0
+burn_in_ms: 50.0
+
+bounds:
+  g_stn_gpe: [0.005, 0.5]
+  g_stn_gpi: [0.005, 0.5]
+  g_gpe_stn: [0.005, 0.5]
+  g_gpe_gpi: [0.005, 0.5]
+  I_drive_stn: [-5.0, 5.0]
+  I_drive_gpe: [-5.0, 5.0]
+  I_drive_gpi: [-5.0, 5.0]
+  mu_stn: [-5.0, 5.0]
+  mu_gpe: [-5.0, 5.0]
+  mu_gpi: [-5.0, 5.0]
+  sigma_stn: [0.0, 5.0]
+  sigma_gpe: [0.0, 5.0]
+  sigma_gpi: [0.0, 5.0]
+
+w_rate: 1.0
+w_cv: 0.2
+constraint_mode: constraint
+
+n_trials: 100
+cma_seed: 42
+network_seed: 42
+init_seed: 7
+ou_seed_base: 1

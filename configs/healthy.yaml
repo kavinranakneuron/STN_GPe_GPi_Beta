@@ -1,0 +1,59 @@
+# Healthy headline optimization study.
+#
+# References for target values:
+#   Tachibana et al. 2014, Front Syst Neurosci 8:74 (rate targets, primate MPTP)
+#   Stein & Bar-Gad 2013, Exp Neurol 245:52-59 (beta band 8-15 Hz)
+#
+# Search-space convention: absolute biophysical units (mS/cm² for
+# conductances, uA/cm² for drives/means/sigmas). All bounds symmetric
+# for the healthy run.
+
+name: healthy
+condition: healthy
+
+# Targets (Hz, dimensionless, dimensionless, fraction)
+target_rate_stn_Hz: 20.0
+target_rate_gpe_Hz: 65.0
+target_rate_gpi_Hz: 67.0
+target_cv_stn: 0.4
+target_cv_gpe: 0.35
+target_cv_gpi: 0.20
+beta_threshold: 0.05    # healthy: STN beta fraction must be < 0.05
+
+# Network sizes (optimization defaults, AGENTS.md §4.5)
+n_stn: 100
+n_gpe: 200
+n_gpi: 150
+
+# Numerical (AGENTS.md §4.7)
+dt_ms: 0.025
+duration_ms: 400.0
+burn_in_ms: 100.0
+
+# Search bounds — symmetric for healthy (AGENTS.md §4.4)
+bounds:
+  g_stn_gpe: [0.005, 0.5]
+  g_stn_gpi: [0.005, 0.5]
+  g_gpe_stn: [0.005, 0.5]
+  g_gpe_gpi: [0.005, 0.5]
+  I_drive_stn: [-5.0, 5.0]
+  I_drive_gpe: [-5.0, 5.0]
+  I_drive_gpi: [-5.0, 5.0]
+  mu_stn: [-5.0, 5.0]
+  mu_gpe: [-5.0, 5.0]
+  mu_gpi: [-5.0, 5.0]
+  sigma_stn: [0.0, 5.0]
+  sigma_gpe: [0.0, 5.0]
+  sigma_gpi: [0.0, 5.0]
+
+# Loss weights (AGENTS.md §3 Phase 2 step 2)
+w_rate: 1.0
+w_cv: 0.2
+constraint_mode: constraint    # use Optuna's constraints_func; fallback is "penalty"
+
+# Optimizer (AGENTS.md §3 Phase 3 step 1: 1500 trials for headline)
+n_trials: 1500
+cma_seed: 42
+network_seed: 42
+init_seed: 7
+ou_seed_base: 1
