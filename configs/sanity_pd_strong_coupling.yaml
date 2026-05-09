@@ -1,0 +1,68 @@
+# Hand-tuned PD strong-coupling sanity check.
+#
+# Diagnostic-only configuration written before Phase 3 to answer:
+# *can the rebuild's network produce STN beta > 0.15 with literature-
+# strong PD-direction coupling?* If yes, the optimizer just needs
+# trials/duration to find such a configuration. If no, we have a
+# model-level problem that has to be addressed before any 1500-trial
+# PD optimization.
+#
+# Direction of perturbation (Albin et al. 1989, Tachibana et al. 2014,
+# Bergman et al. 1994):
+#   - STN → GPe excitation near the upper bound (strong glutamate)
+#   - GPe → STN inhibition near the lower bound (disinhibition)
+#   - STN → GPi mid-range
+#   - GPe → GPi mid-range
+#
+# This file documents the test; it is NOT a StudyConfig and is not
+# consumed by scripts/01 or 02. The diagnostic script that runs it
+# is intentionally not committed.
+
+name: sanity_pd_strong_coupling
+purpose: |
+  Confirm before Phase 3 PD optimization that the network can in
+  principle produce STN beta > 0.15 (the PD target) under literature-
+  strong coupling. Beta band [8, 15] Hz; Welch nperseg = 256 (frequency
+  resolution 1000/256 ≈ 3.91 Hz < 4 Hz, per user spec).
+
+# Hand-tuned parameter values (NOT optimizer bounds — these are the
+# fixed values the simulation runs at).
+parameters:
+  g_stn_gpe: 0.5      # mS/cm² — upper bound of healthy/symmetric range
+  g_stn_gpi: 0.25     # mS/cm² — mid-range
+  g_gpe_stn: 0.005    # mS/cm² — lower bound (disinhibition)
+  g_gpe_gpi: 0.15     # mS/cm² — mid-range
+  I_drive_stn: 0.0    # µA/cm² — midpoint of [-5, +5]
+  I_drive_gpe: 0.0
+  I_drive_gpi: 0.0
+  mu_stn: 0.0         # OU mean — midpoint
+  mu_gpe: 0.0
+  mu_gpi: 0.0
+  sigma_stn: 1.5      # OU sigma — modest noise
+  sigma_gpe: 1.5
+  sigma_gpi: 1.5
+
+# Network and simulation
+network:
+  n_stn: 100
+  n_gpe: 200
+  n_gpi: 150
+  duration_ms: 1000.0
+  burn_in_ms: 200.0
+  dt_ms: 0.025
+  network_seed: 42
+  ou_seed: 1
+  init_seed: 7
+
+# Spectral analysis
+welch:
+  bin_ms: 1.0         # 1 ms bins → fs = 1000 Hz
+  nperseg: 256        # frequency resolution 1000/256 ≈ 3.91 Hz
+  beta_band: [8.0, 15.0]
+  broadband: [1.0, 100.0]
+
+# Decision rules (per user spec)
+decision_rules:
+  - "STN beta > 0.15 → proceed to Phase 3, lengthen PD sim to 600 ms post-burn"
+  - "STN beta in [0.05, 0.15] → surface for discussion before headline PD"
+  - "STN beta < 0.05 → surface immediately, model-level decision required"
