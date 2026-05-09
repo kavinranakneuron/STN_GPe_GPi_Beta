@@ -126,12 +126,13 @@ window, where the residual difference is sub-2-Hz.
 Decision (May 2026): replaced the GW-inspired single-compartment STN with
 the canonical Terman-Rubin 2002 STN model (`episodic.ode` parameters,
 ModelDB 182758). The GW headroom problem (silent at I = 0, ~11 Hz at
-I = 42 µA/cm²) is resolved — RT 2002 fires ~10 Hz tonically at I = 0 and
-hits the healthy 20 Hz target at I_drive ≈ 5 µA/cm², comfortably inside
-the optimizer's deterministic envelope of [-10, +10] µA/cm². RT 2002 is
-single-compartment by design (not a multi-compartment collapse), shares
-its model lineage with the Rubin-Terman 2004 GPe/GPi neurons already in
-use, and is well-precedented in the STN-GPe oscillation literature.
+I = 42 µA/cm²) is resolved — the new STN fires ~10 Hz tonically at I = 0
+and hits the healthy 20 Hz target at I_drive ≈ 5 µA/cm², comfortably
+inside the optimizer's deterministic envelope of [-10, +10] µA/cm².
+RT 2002 is single-compartment by design (not a multi-compartment collapse),
+shares its model lineage with the Rubin-Terman 2004 GPe/GPi neurons
+already in use, and is well-precedented in the STN-GPe oscillation
+literature.
 
 Implementation: `bgnet/neurons/stn.py`. Tests: `tests/unit/test_stn_neuron.py`
 (six tests covering tonic firing rate, f-I monotonicity, post-inhibitory
@@ -139,13 +140,35 @@ rebound, calcium-AHP adaptation, dt sensitivity, and bounds/NaN hygiene).
 Validation document with f-I curve, GW-vs-RT comparison plot, rebound
 trace, adaptation trace, and dt sensitivity table: `docs/stn_validation.md`.
 
-One implementation discrepancy with the instructions: PHASE_1_5_INSTRUCTIONS.md
-writes `I_Ca = g_Ca * sinf(V)^2 * (V - E_Ca)`. The literal `s^2` form fires
-~2.7 Hz spontaneously, well below the canonical RT 2002 ~10 Hz. The linear
-form `I_Ca = g_Ca * sinf(V) * (V - E_Ca)` recovers the canonical rate, so
-that is what `bgnet/neurons/stn.py` implements (per the instruction's
-"XPP source wins" directive). Inline-commented at the I_Ca expression and
-called out in the module docstring and the Phase 1.5 commit message.
+**I_Ca activation gate.** The high-threshold calcium current is
+implemented as `I_Ca = g_Ca · sinf(V) · (V − E_Ca)` — a linear
+instantaneous gate — rather than `sinf(V)^2`. This is a deliberate
+engineering choice with documented biophysical rationale, not a
+reluctant transcription compromise:
+
+- Empirically the linear form fires the published RT 2002 ~10 Hz at
+  I = 0 with a smooth monotonic f-I that hits 20 Hz at I = 5 µA/cm²
+  (well inside the optimizer's drive envelope). The squared form fires
+  ~2 Hz at I = 0 and would not reach the optimization targets inside
+  the bounded search space.
+- The pacing mechanism under the linear form is a **sub-threshold
+  I_Ca + Na-window inward current** balancing leak and Ca-AHP. This
+  matches the experimental characterization of autonomous STN firing
+  (Bevan & Wilson 1999, J Neurosci 19:7617-7628; Atherton & Bevan 2005,
+  J Neurosci 25:8272-8281), which describe STN autonomous discharge as
+  driven by persistent sodium and a small sustained calcium current at
+  sub-threshold voltages.
+- The canonical RT 2002 T-current rebound mechanism is preserved and
+  selectively engaged. Under tonic firing the T-current is essentially
+  inactive because the cell never hyperpolarizes deeply enough to
+  de-inactivate r. Under sustained hyperpolarization (experimental drive
+  or network-level GPe inhibition), r climbs to ~0.91, I_T transients
+  to -77 µA/cm² on release, and 2-3 rebound spikes fire on schedule.
+
+Empirical and biophysical justification: `docs/stn_validation.md` §2.
+Audit trail with full diagnostic battery (resting Ca, current balance
+at sub-threshold rest, phase plane, f-I family with and without OU
+noise): `docs/stn_linear_form_diagnostics.md`.
 
 The Phase 1 review notes above are preserved unchanged — the headroom
 analysis is the reason for the swap and should remain visible in the

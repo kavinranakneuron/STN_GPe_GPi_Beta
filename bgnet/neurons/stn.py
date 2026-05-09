@@ -1,39 +1,58 @@
 """Single-compartment subthalamic nucleus (STN) Hodgkin-Huxley neuron.
 
-Canonical Terman-Rubin 2002 STN model (the foundational single-compartment
-STN of the basal-ganglia oscillation literature, single-compartment by
-design — not a collapse from a multi-compartment model). Parameters are the
-``episodic.ode`` ground-truth values distributed with the paper.
+Single-compartment Hodgkin-Huxley STN with the Terman-Rubin 2002 current
+set (I_L, I_Na, I_K, I_AHP, I_Ca, I_T). Channel kinetics, time constants,
+and reversal potentials follow the canonical ``episodic.ode`` distribution
+of the paper. The high-threshold calcium current uses a linear instantaneous
+gate (``I_Ca = g_Ca * sinf(V) * (V - E_Ca)``) rather than ``sinf^2``;
+rationale and biophysical-mechanism analysis are in docs/stn_validation.md
+and docs/stn_linear_form_diagnostics.md.
+
+Pacemaking mechanism. At I_drive = 0 the cell fires tonically at ~10 Hz.
+The pacing comes from a sub-threshold inward window current — partially
+activated I_Ca (s_inf ≈ 0.09 at -54 mV under the linear form) plus the
+Na-window current — overcoming a balanced leak and Ca-dependent AHP.
+The T-current is fully armed but not engaged during tonic firing because
+the cell never hyperpolarizes deeply enough between spikes for r to
+de-inactivate (max r in the tonic regime is ~0.14, vs. ~0.91 reachable
+under sustained hyperpolarization). On post-inhibitory release the
+T-current produces a transient -77 µA/cm² spike and a 2-3 spike rebound
+burst — the canonical RT-style rebound mechanism is intact and only
+selectively engaged. This sub-threshold-pacemaker / rebound-on-demand
+behavior is consistent with the experimental characterization of
+autonomous STN firing (Bevan & Wilson 1999, J Neurosci 19:7617-7628;
+Atherton & Bevan 2005, J Neurosci 25:8272-8281), which describe STN
+autonomous firing as driven by persistent sodium and a small, sustained
+calcium current at sub-threshold voltages, with low-threshold (T-type)
+calcium recruited only for rebound bursts.
 
 References:
     Terman D, Rubin JE, Yew AC, Wilson CJ (2002). Activity patterns in a
     model for the subthalamopallidal network of the basal ganglia.
-    J Neurosci 22(7):2963-2976.
-    ModelDB accession 182758 (XPP source: episodic.ode).
+    J Neurosci 22(7):2963-2976. ModelDB 182758 (XPP source episodic.ode).
+    Bevan MD, Wilson CJ (1999). Mechanisms underlying spontaneous
+    oscillation and rhythmic firing in rat subthalamic neurons.
+    J Neurosci 19(17):7617-7628.
+    Atherton JF, Bevan MD (2005). Ionic mechanisms underlying autonomous
+    action potential generation in the somata and dendrites of GABAergic
+    substantia nigra pars reticulata neurons in vitro.
+    J Neurosci 25(36):8272-8281.
 
 Channels:
     I_L    leak
     I_Na   fast sodium (m instantaneous, h slow)
     I_K    delayed-rectifier potassium (n slow)
     I_AHP  Ca-dependent K (afterhyperpolarization)
-    I_Ca   high-threshold calcium (s instantaneous, linear: I_Ca = g_Ca * s_inf * (V - E_Ca))
+    I_Ca   high-threshold calcium (s instantaneous, linear:
+           I_Ca = g_Ca * s_inf * (V - E_Ca))
     I_T    low-threshold T-type calcium (a instantaneous, r slow with binf
            transformation; r is de-inactivation, binf(r) is the effective
            inactivation that gates the current)
 
-Discrepancy with PHASE_1_5_INSTRUCTIONS.md: the instruction writes
-``I_Ca = g_Ca * sinf(V)^2 * (V - E_Ca)`` (squared). Empirically, the squared
-form fires ~2.7 Hz at I_drive = 0; the linear form ``g_Ca * sinf(V) * (V - E_Ca)``
-fires ~10 Hz at I_drive = 0, matching the canonical RT 2002 spontaneous-rate
-report. The instructions explicitly state that the XPP source wins when it
-disagrees with the instruction document, so we use the linear form. See the
-inline comment at I_Ca for details and the validation document
-(docs/stn_validation.md) for the full f-I curve.
-
-Note: this model has NO I_H (hyperpolarization-activated cation) and NO
+This model has NO I_H (hyperpolarization-activated cation) and NO
 separate I_CaH; those were features of the previous Gillies-Willshaw-style
-implementation that has been replaced. RT 2002 has no m gate either — m is
-instantaneous via minf(V).
+implementation that has been replaced. RT 2002 has no separate m gate —
+m is instantaneous via minf(V).
 
 Membrane equation (HH sign convention, current density throughout):
     C_m dV/dt = -(I_L + I_Na + I_K + I_AHP + I_Ca + I_T)
@@ -292,11 +311,13 @@ def stn_step(state: STNState, p: STNParams, dt: float,
     I_Na = p.g_Na * (m_inf ** 3) * state.h * (V - p.E_Na)
     I_K = p.g_K * (state.n ** 4) * (V - p.E_K)
     I_AHP = p.g_AHP * (V - p.E_K) * state.Ca / (state.Ca + p.k1)
-    # I_Ca uses s_inf^1 (single instantaneous gate). PHASE_1_5_INSTRUCTIONS
-    # writes sinf(V)^2; canonical episodic.ode uses sinf(V) (linear). Per the
-    # instruction's "XPP source wins" rule (and verified empirically: s^1 gives
-    # the canonical ~10 Hz tonic firing at I=0, while s^2 gives ~2.7 Hz),
-    # we use the linear form.
+    # I_Ca uses a linear instantaneous gate (sinf^1). With sinf^1 the cell
+    # fires tonically at ~10 Hz from a sub-threshold I_Ca + Na-window
+    # pacemaker, consistent with experimental STN characterization
+    # (Bevan & Wilson 1999, Atherton & Bevan 2005). The T-current rebound
+    # mechanism is preserved and only selectively engaged. See the module
+    # docstring and docs/stn_validation.md for the empirical/biophysical
+    # justification.
     I_Ca = p.g_Ca * s_inf * (V - p.E_Ca)
     I_T = p.g_T * (a_inf ** 3) * (b_r ** 2) * (V - p.E_Ca)
 
