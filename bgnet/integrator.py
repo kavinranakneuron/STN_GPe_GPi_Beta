@@ -30,6 +30,7 @@ import jax
 import jax.numpy as jnp
 
 from bgnet.connectivity import Connectivity, gather_input
+from bgnet.heterogeneity import HetMul
 from bgnet.neurons.pallidum import PallidumParams, PallidumState, pallidum_step_vmap
 from bgnet.neurons.stn import STNParams, STNState, stn_step_vmap
 from bgnet.noise import OUParams, ou_step
@@ -101,6 +102,9 @@ class StaticParams(NamedTuple):
     stn_p: STNParams
     gpe_p: PallidumParams
     gpi_p: PallidumParams
+    stn_het: HetMul
+    gpe_het: HetMul
+    gpi_het: HetMul
     syn_stn_gpe_p: SynapseParams
     syn_stn_gpi_p: SynapseParams
     syn_gpe_stn_p: SynapseParams
@@ -162,11 +166,11 @@ def _step(state: NetworkState, t_ms: float, sp: StaticParams) -> tuple[NetworkSt
     I_drive_gpe_vec = jnp.full((n_gpe,), sp.I_drive_gpe)
     I_drive_gpi_vec = jnp.full((n_gpi,), sp.I_drive_gpi)
 
-    new_stn, sp_stn = stn_step_vmap(state.stn, sp.stn_p, dt,
+    new_stn, sp_stn = stn_step_vmap(state.stn, sp.stn_p, sp.stn_het, dt,
                                     I_drive_stn_vec, I_syn_stn, I_noise_stn, t_ms)
-    new_gpe, sp_gpe = pallidum_step_vmap(state.gpe, sp.gpe_p, dt,
+    new_gpe, sp_gpe = pallidum_step_vmap(state.gpe, sp.gpe_p, sp.gpe_het, dt,
                                          I_drive_gpe_vec, I_syn_gpe, I_noise_gpe, t_ms)
-    new_gpi, sp_gpi = pallidum_step_vmap(state.gpi, sp.gpi_p, dt,
+    new_gpi, sp_gpi = pallidum_step_vmap(state.gpi, sp.gpi_p, sp.gpi_het, dt,
                                          I_drive_gpi_vec, I_syn_gpi, I_noise_gpi, t_ms)
 
     # 4. Push current-step spikes into the per-source circular buffers.

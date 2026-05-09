@@ -4,19 +4,21 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
+from bgnet.heterogeneity import homogeneous_het
 from bgnet.neurons.pallidum import gpe_params, gpi_params, initial_state, pallidum_step
 
 
 def _run_isolated(p, I_drive: float, T_ms: float = 1200.0,
                   dt_ms: float = 0.025, burn_ms: float = 200.0) -> float:
     state0 = initial_state(1)
+    het = homogeneous_het(1)
     n_steps = int(T_ms / dt_ms)
 
     @jax.jit
     def run():
         def body(carry, i):
             state, _ = carry
-            new_state, sp = pallidum_step(state, p, dt_ms,
+            new_state, sp = pallidum_step(state, p, het, dt_ms,
                                           jnp.array([I_drive]),
                                           jnp.array([0.0]),
                                           jnp.array([0.0]), i * dt_ms)
@@ -65,6 +67,7 @@ def test_gpi_no_nan():
     """No NaN even at strong positive drive."""
     p = gpi_params()
     state0 = initial_state(50, key=jax.random.PRNGKey(0))
+    het = homogeneous_het(50)
 
     @jax.jit
     def run():
@@ -73,7 +76,8 @@ def test_gpi_no_nan():
             state, _ = carry
             I = jnp.full((50,), 5.0)
             zero = jnp.zeros((50,))
-            new_state, sp = pallidum_step_vmap(state, p, 0.025, I, zero, zero, i * 0.025)
+            new_state, sp = pallidum_step_vmap(state, p, het, 0.025,
+                                               I, zero, zero, i * 0.025)
             return (new_state, sp), state.V
         (final, _), Vs = jax.lax.scan(body,
                                       (state0, jnp.zeros((50,), dtype=bool)),

@@ -55,7 +55,13 @@ def test_smoke_100ms_nonzero_firing_no_nan():
 def test_two_seed_consistency():
     """Two seeds sharing the same configuration produce different spike
     realizations (so OU is actually fresh per trial) but their population
-    firing rates agree to within ~5 Hz on a 200 ms window."""
+    firing rates agree on a 200 ms window. With per-neuron heterogeneity
+    enabled (heterogeneity_pct = 0.10 default) the GPi seed-to-seed
+    sensitivity is a few Hz higher than in the strictly-homogeneous
+    Phase-1 setup; the tolerance is loosened from 5 to 8 Hz to reflect
+    that. Same heterogeneity_pct/het_seed across both runs ensures the
+    cell-intrinsic perturbations are identical — only the OU realization
+    differs."""
     cfg = _default_cfg()
     out_a = simulate(cfg, duration_ms=200.0)
     cfg_b = replace(cfg, ou_seed=cfg.ou_seed + 1)
@@ -66,9 +72,9 @@ def test_two_seed_consistency():
 
     rs_a, rg_a, ri_a = _rates(out_a, cfg.dt_ms)
     rs_b, rg_b, ri_b = _rates(out_b, cfg.dt_ms)
-    assert abs(rs_a - rs_b) < 5.0
-    assert abs(rg_a - rg_b) < 5.0
-    assert abs(ri_a - ri_b) < 5.0
+    assert abs(rs_a - rs_b) < 8.0, f"STN: {rs_a} vs {rs_b}"
+    assert abs(rg_a - rg_b) < 8.0, f"GPe: {rg_a} vs {rg_b}"
+    assert abs(ri_a - ri_b) < 8.0, f"GPi: {ri_a} vs {ri_b}"
 
 
 def test_perf_600ms_under_5s():

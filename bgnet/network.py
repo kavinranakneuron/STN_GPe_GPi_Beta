@@ -20,6 +20,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from bgnet.connectivity import build_connectivity
+from bgnet.heterogeneity import sampled_het
 from bgnet.integrator import (
     NetworkState,
     StaticParams,
@@ -79,6 +80,14 @@ class NetworkConfig:
     network_seed: int = 42
     ou_seed: int = 1
     init_seed: int = 7
+    het_seed: int = 17
+
+    # Per-neuron biophysical heterogeneity (fixed at build time, not
+    # optimized). Multiplicative SD on each neuron's intrinsic g_L, g_Na,
+    # g_K — breaks the synchronization degeneracy that otherwise locks
+    # the STN-GPe loop into a coherent rhythm at any non-trivial coupling
+    # (Hahn & McIntyre 2010, Kumaravelu et al. 2016).
+    heterogeneity_pct: float = 0.10
 
 
 def _delay_steps(delay_ms: float, dt_ms: float) -> int:
@@ -109,10 +118,15 @@ def build(cfg: NetworkConfig) -> tuple[NetworkState, StaticParams]:
     ou_gpe_p = OUParams(mu=cfg.mu_gpe, sigma=cfg.sigma_gpe)
     ou_gpi_p = OUParams(mu=cfg.mu_gpi, sigma=cfg.sigma_gpi)
 
-    # 4. Cell-type params
+    # 4. Cell-type params (homogeneous scalar) and per-neuron heterogeneity
     stn_p = STNParams()
     gpe_p = gpe_params()
     gpi_p = gpi_params()
+    key_het = jax.random.PRNGKey(cfg.het_seed)
+    k_het_stn, k_het_gpe, k_het_gpi = jax.random.split(key_het, 3)
+    stn_het = sampled_het(cfg.n_stn, cfg.heterogeneity_pct, k_het_stn)
+    gpe_het = sampled_het(cfg.n_gpe, cfg.heterogeneity_pct, k_het_gpe)
+    gpi_het = sampled_het(cfg.n_gpi, cfg.heterogeneity_pct, k_het_gpi)
 
     # 5. Delay steps and buffer sizes
     dsteps_stn_gpe = _delay_steps(cfg.delay_stn_gpe_ms, cfg.dt_ms)
@@ -124,6 +138,7 @@ def build(cfg: NetworkConfig) -> tuple[NetworkState, StaticParams]:
 
     sp = StaticParams(
         stn_p=stn_p, gpe_p=gpe_p, gpi_p=gpi_p,
+        stn_het=stn_het, gpe_het=gpe_het, gpi_het=gpi_het,
         syn_stn_gpe_p=syn_stn_gpe_p, syn_stn_gpi_p=syn_stn_gpi_p,
         syn_gpe_stn_p=syn_gpe_stn_p, syn_gpe_gpi_p=syn_gpe_gpi_p,
         ou_stn_p=ou_stn_p, ou_gpe_p=ou_gpe_p, ou_gpi_p=ou_gpi_p,

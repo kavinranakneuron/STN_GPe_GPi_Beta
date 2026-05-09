@@ -24,6 +24,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
+from bgnet.heterogeneity import homogeneous_het
 from bgnet.neurons.stn import STNParams, initial_state, stn_step
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +40,7 @@ def _run_constant(I_drive: float, T_ms: float, dt_ms: float = 0.025,
                   burn_ms: float = 500.0):
     p = STNParams()
     state0 = initial_state(1)
+    het = homogeneous_het(1)
     n_steps = int(T_ms / dt_ms)
 
     @jax.jit
@@ -46,7 +48,7 @@ def _run_constant(I_drive: float, T_ms: float, dt_ms: float = 0.025,
         def body(carry, i):
             state, _ = carry
             t = i * dt_ms
-            new_state, sp = stn_step(state, p, dt_ms,
+            new_state, sp = stn_step(state, p, het, dt_ms,
                                      jnp.array([I_drive]), jnp.array([0.0]),
                                      jnp.array([0.0]), t)
             return (new_state, sp), (new_state.V, sp)
@@ -65,6 +67,7 @@ def _run_constant(I_drive: float, T_ms: float, dt_ms: float = 0.025,
 def _run_drive_schedule(drive_arr: np.ndarray, dt_ms: float = 0.025):
     p = STNParams()
     state0 = initial_state(1)
+    het = homogeneous_het(1)
     n_steps = int(drive_arr.shape[0])
     drive_jnp = jnp.asarray(drive_arr)
 
@@ -74,7 +77,7 @@ def _run_drive_schedule(drive_arr: np.ndarray, dt_ms: float = 0.025):
             state, _ = carry
             t = i * dt_ms
             I = jnp.array([drive_jnp[i]])
-            new_state, sp = stn_step(state, p, dt_ms, I,
+            new_state, sp = stn_step(state, p, het, dt_ms, I,
                                      jnp.array([0.0]), jnp.array([0.0]), t)
             return (new_state, sp), (new_state.V, new_state.r, new_state.Ca, sp)
         (final, _), tr = jax.lax.scan(body, (state0, jnp.array([False])),

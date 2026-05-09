@@ -37,6 +37,8 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+from bgnet.heterogeneity import HetMul, homogeneous_het
+
 
 class PallidumParams(NamedTuple):
     """Parameters for one pallidum cell type (GPe or GPi).
@@ -186,11 +188,13 @@ def _gating(V: jnp.ndarray):
 # Step
 # ---------------------------------------------------------------------------
 
-def pallidum_step(state: PallidumState, p: PallidumParams, dt: float,
+def pallidum_step(state: PallidumState, p: PallidumParams, het: HetMul,
+                  dt: float,
                   I_drive: jnp.ndarray, I_syn: jnp.ndarray, I_noise: jnp.ndarray,
                   t_ms: float) -> tuple[PallidumState, jnp.ndarray]:
-    """Forward-Euler update of one pallidum neuron (GPe or GPi).
-    Returns (new_state, spiked_bool)."""
+    """Forward-Euler update of one pallidum neuron (GPe or GPi). For
+    unit tests on a single neuron use ``homogeneous_het(1)``. Returns
+    ``(new_state, spiked_bool)``."""
     V = state.V
     m_inf, n_inf, h_inf, a_inf, r_inf, s_inf, tau_n, tau_h, tau_r = _gating(V)
 
@@ -199,10 +203,11 @@ def pallidum_step(state: PallidumState, p: PallidumParams, dt: float,
     h_new = jnp.clip(state.h + dt * (h_inf - state.h) / jnp.maximum(tau_h, 1e-3), 0.0, 1.0)
     r_new = jnp.clip(state.r + dt * (r_inf - state.r) / jnp.maximum(tau_r, 1e-3), 0.0, 1.0)
 
-    # Currents (HH sign convention: I_X = g_X * (V - E_X), positive hyperpolarizing)
-    I_Na = p.g_Na * (m_inf ** 3) * state.h * (V - p.E_Na)
-    I_K = p.g_K * (state.n ** 4) * (V - p.E_K)
-    I_L = p.g_L * (V - p.E_L)
+    # Currents (HH sign convention: I_X = g_X * (V - E_X), positive hyperpolarizing).
+    # Per-neuron heterogeneity multipliers on g_L, g_Na, g_K.
+    I_Na = p.g_Na * het.mul_g_Na * (m_inf ** 3) * state.h * (V - p.E_Na)
+    I_K = p.g_K * het.mul_g_K * (state.n ** 4) * (V - p.E_K)
+    I_L = p.g_L * het.mul_g_L * (V - p.E_L)
     I_T = p.g_T * (a_inf ** 3) * state.r * (V - p.E_Ca)
     I_Ca = p.g_Ca * (s_inf ** 2) * (V - p.E_Ca)
     ahp = state.Ca / (state.Ca + p.k_AHP + _EPS)
@@ -230,5 +235,7 @@ def pallidum_step(state: PallidumState, p: PallidumParams, dt: float,
 pallidum_step_vmap = jax.vmap(
     pallidum_step,
     in_axes=(PallidumState(V=0, n=0, h=0, r=0, Ca=0, last_spike_ms=0),
-             None, None, 0, 0, 0, None),
+             None,
+             HetMul(mul_g_L=0, mul_g_Na=0, mul_g_K=0),
+             None, 0, 0, 0, None),
 )

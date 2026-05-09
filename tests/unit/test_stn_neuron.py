@@ -16,6 +16,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from bgnet.heterogeneity import homogeneous_het
 from bgnet.neurons.stn import STNParams, initial_state, stn_step, stn_step_vmap
 
 
@@ -31,6 +32,7 @@ def _run_isolated(I_drive: float, T_ms: float, dt_ms: float = 0.025,
     the post-burn window. Traces span the whole simulation."""
     p = STNParams()
     state0 = initial_state(1)
+    het = homogeneous_het(1)
     n_steps = int(T_ms / dt_ms)
 
     @jax.jit
@@ -38,7 +40,7 @@ def _run_isolated(I_drive: float, T_ms: float, dt_ms: float = 0.025,
         def body(carry, i):
             state, _ = carry
             t = i * dt_ms
-            new_state, sp = stn_step(state, p, dt_ms,
+            new_state, sp = stn_step(state, p, het, dt_ms,
                                      jnp.array([I_drive]), jnp.array([0.0]),
                                      jnp.array([0.0]), t)
             return (new_state, sp), (new_state.V, sp)
@@ -65,6 +67,7 @@ def _run_step_drive(drive_schedule, dt_ms: float = 0.025
     """
     p = STNParams()
     state0 = initial_state(1)
+    het = homogeneous_het(1)
     n_steps = drive_schedule.shape[0]
 
     @jax.jit
@@ -73,7 +76,7 @@ def _run_step_drive(drive_schedule, dt_ms: float = 0.025
             state, _ = carry
             t = i * dt_ms
             I = jnp.array([drive_schedule[i]])
-            new_state, sp = stn_step(state, p, dt_ms, I,
+            new_state, sp = stn_step(state, p, het, dt_ms, I,
                                      jnp.array([0.0]), jnp.array([0.0]), t)
             return (new_state, sp), (new_state.V, new_state.r, sp)
         (final, _), (Vs, rs, sps) = jax.lax.scan(body, (state0, jnp.array([False])),
@@ -204,6 +207,7 @@ def test_stn_no_nan_and_bounded_under_load():
     gating variables remain bounded and free of NaN."""
     p = STNParams()
     state0 = initial_state(50, key=jax.random.PRNGKey(0))
+    het = homogeneous_het(50)
     dt = 0.025
     n_steps = 8000  # 200 ms
 
@@ -214,7 +218,7 @@ def test_stn_no_nan_and_bounded_under_load():
             t = i * dt
             I = jnp.full((50,), 60.0)
             zero = jnp.zeros((50,))
-            new_state, sp = stn_step_vmap(state, p, dt, I, zero, zero, t)
+            new_state, sp = stn_step_vmap(state, p, het, dt, I, zero, zero, t)
             return (new_state, sp), state.V
         (final, _), Vs = jax.lax.scan(body, (state0, jnp.zeros((50,), dtype=bool)),
                                       jnp.arange(n_steps))

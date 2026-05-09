@@ -85,6 +85,8 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+from bgnet.heterogeneity import HetMul, homogeneous_het
+
 
 # ---------------------------------------------------------------------------
 # Parameters and state containers
@@ -286,11 +288,14 @@ def initial_state(n_neurons: int, V_init: float = -65.0,
 # Step
 # ---------------------------------------------------------------------------
 
-def stn_step(state: STNState, p: STNParams, dt: float,
+def stn_step(state: STNState, p: STNParams, het: HetMul, dt: float,
              I_drive: jnp.ndarray, I_syn: jnp.ndarray, I_noise: jnp.ndarray,
              t_ms: float) -> tuple[STNState, jnp.ndarray]:
-    """Forward-Euler update of one STN neuron (or a population, when arrays
-    are 1-D and params are scalar). Returns (new_state, spiked_bool)."""
+    """Forward-Euler update of one STN neuron (or a population, when
+    arrays are 1-D, params are scalar, and ``het`` carries per-neuron
+    multipliers on g_L / g_Na / g_K). For unit tests on a single neuron
+    use ``homogeneous_het(1)`` (multiplier = 1.0). Returns
+    ``(new_state, spiked_bool)``."""
     V = state.V
 
     # Steady states and time constants at the current V
@@ -306,10 +311,14 @@ def stn_step(state: STNState, p: STNParams, dt: float,
     tau_n = taun(V, p)
     tau_r = taur(V, p)
 
-    # Ionic currents (HH sign convention, m and s and a are instantaneous)
-    I_L = p.g_L * (V - p.E_L)
-    I_Na = p.g_Na * (m_inf ** 3) * state.h * (V - p.E_Na)
-    I_K = p.g_K * (state.n ** 4) * (V - p.E_K)
+    # Ionic currents (HH sign convention, m and s and a are instantaneous).
+    # Per-neuron heterogeneity multipliers on g_L, g_Na, g_K (intrinsic
+    # conductances): g_AHP, g_Ca, g_T are homogeneous because heterogeneity
+    # in the tonic intrinsic currents is sufficient to break the synchrony
+    # in the STN-GPe loop without needing variation in every channel.
+    I_L = p.g_L * het.mul_g_L * (V - p.E_L)
+    I_Na = p.g_Na * het.mul_g_Na * (m_inf ** 3) * state.h * (V - p.E_Na)
+    I_K = p.g_K * het.mul_g_K * (state.n ** 4) * (V - p.E_K)
     I_AHP = p.g_AHP * (V - p.E_K) * state.Ca / (state.Ca + p.k1)
     # I_Ca uses a linear instantaneous gate (sinf^1). With sinf^1 the cell
     # fires tonically at ~10 Hz from a sub-threshold I_Ca + Na-window
@@ -347,9 +356,12 @@ def stn_step(state: STNState, p: STNParams, dt: float,
     return new_state, spiked
 
 
-# Vectorized over neurons; scalar params broadcast.
+# Vectorized over neurons; scalar STNParams broadcast, HetMul is vmapped
+# over its axis-0 entries (one entry per neuron).
 stn_step_vmap = jax.vmap(
     stn_step,
     in_axes=(STNState(V=0, h=0, n=0, r=0, Ca=0, last_spike_ms=0),
-             None, None, 0, 0, 0, None),
+             None,
+             HetMul(mul_g_L=0, mul_g_Na=0, mul_g_K=0),
+             None, 0, 0, 0, None),
 )
