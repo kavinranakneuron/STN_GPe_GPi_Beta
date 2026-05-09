@@ -130,24 +130,38 @@ def test_population_rate_proxy_shape_consistency():
 # beta_fraction
 # ---------------------------------------------------------------------------
 
-def test_beta_fraction_pure_10hz_sine_is_dominant():
-    """Sine at 10 Hz (in the beta band) should give ~all power in beta."""
+def test_beta_fraction_pure_20hz_sine_is_dominant():
+    """Sine at 20 Hz (centered in the [13, 30] Hz beta band) should give
+    ~all power in beta."""
     fs = 500.0  # Hz
     duration_s = 6.0
     t = np.arange(int(fs * duration_s)) / fs
-    sig = np.sin(2 * np.pi * 10.0 * t)
+    sig = np.sin(2 * np.pi * 20.0 * t)
     bf, _, _ = beta_fraction(sig, sample_dt_ms=1000.0 / fs)
-    assert bf > 0.9, f"10 Hz sine should put >90% power in [8,15] Hz, got {bf}"
+    assert bf > 0.9, f"20 Hz sine should put >90% power in [13,30] Hz, got {bf}"
 
 
-def test_beta_fraction_pure_30hz_sine_is_negligible():
-    """Sine at 30 Hz (above beta band) → ~0 in beta."""
+def test_beta_fraction_pure_50hz_sine_is_negligible():
+    """Sine at 50 Hz (above [13, 30] Hz beta band) → ~0 in beta."""
     fs = 500.0
     duration_s = 6.0
     t = np.arange(int(fs * duration_s)) / fs
-    sig = np.sin(2 * np.pi * 30.0 * t)
+    sig = np.sin(2 * np.pi * 50.0 * t)
     bf, _, _ = beta_fraction(sig, sample_dt_ms=1000.0 / fs)
-    assert bf < 0.05, f"30 Hz sine should be ~0 in [8,15] Hz, got {bf}"
+    assert bf < 0.05, f"50 Hz sine should be ~0 in [13,30] Hz, got {bf}"
+
+
+def test_beta_fraction_explicit_band_kwarg():
+    """If a caller passes an explicit band (e.g. the historic 8-15 Hz),
+    the function honors it. This is what wires through to TrialMetrics
+    when a study config overrides the band."""
+    fs = 500.0
+    duration_s = 6.0
+    t = np.arange(int(fs * duration_s)) / fs
+    sig = np.sin(2 * np.pi * 10.0 * t)
+    bf, _, _ = beta_fraction(sig, sample_dt_ms=1000.0 / fs,
+                             beta_band=(8.0, 15.0))
+    assert bf > 0.9, f"10 Hz sine in [8,15] Hz band: expected >0.9, got {bf}"
 
 
 def test_beta_fraction_tiny_signal_safe():

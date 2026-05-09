@@ -135,6 +135,11 @@ class StudyConfig:
     constraint_mode: ConstraintMode = "constraint"
     beta_penalty_weight: float = 5.0   # only used if constraint_mode == "penalty"
 
+    # Spectral analysis (AGENTS.md §4.3, default 13-30 Hz per the
+    # pre-Phase-3 sanity check; see docs/network_beta_sanity_check.md).
+    beta_band: tuple[float, float] = (13.0, 30.0)
+    broadband: tuple[float, float] = (1.0, 100.0)
+
     # Optimizer
     n_trials: int = 1000
     cma_seed: int = 42                  # CMA-ES sampler seed
@@ -161,6 +166,16 @@ class StudyConfig:
             raise ValueError("dt_ms must be positive")
         if self.n_trials <= 0:
             raise ValueError("n_trials must be positive")
+        for label, band in (("beta_band", self.beta_band),
+                            ("broadband", self.broadband)):
+            if (not isinstance(band, tuple)) or len(band) != 2:
+                raise ValueError(
+                    f"{label} must be a (low, high) tuple, got {band!r}"
+                )
+            if band[0] >= band[1]:
+                raise ValueError(
+                    f"{label} low ({band[0]}) must be < high ({band[1]})"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +225,10 @@ def from_dict(d: dict) -> StudyConfig:
     kwargs.pop("bgnet_version", None)
     if "bounds" in kwargs:
         kwargs["bounds"] = _parse_bounds(kwargs["bounds"])
+    # YAML parses tuples-of-floats as lists; normalize for the dataclass.
+    for k in ("beta_band", "broadband"):
+        if k in kwargs and isinstance(kwargs[k], list):
+            kwargs[k] = tuple(kwargs[k])
     return StudyConfig(**kwargs)
 
 
@@ -228,7 +247,8 @@ def from_yaml(path: str | Path) -> StudyConfig:
 # ---------------------------------------------------------------------------
 
 def to_yaml_dict(cfg: StudyConfig) -> dict:
-    """Render a StudyConfig back to a YAML-friendly mapping (Bound -> [lo, hi])."""
+    """Render a StudyConfig back to a YAML-friendly mapping (Bound -> [lo, hi],
+    band tuples -> [lo, hi] lists)."""
     out: dict[str, Any] = {}
     for f in dataclasses.fields(cfg):
         v = getattr(cfg, f.name)
@@ -237,6 +257,8 @@ def to_yaml_dict(cfg: StudyConfig) -> dict:
                 bf.name: [getattr(v, bf.name).low, getattr(v, bf.name).high]
                 for bf in dataclasses.fields(SearchBounds)
             }
+        elif isinstance(v, tuple):
+            out[f.name] = list(v)
         else:
             out[f.name] = v
     return out

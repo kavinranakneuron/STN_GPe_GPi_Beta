@@ -2,7 +2,9 @@
 #
 # References for target values:
 #   Tachibana et al. 2014, Front Syst Neurosci 8:74 (rate targets, primate MPTP)
-#   Stein & Bar-Gad 2013, Exp Neurol 245:52-59 (beta band 8-15 Hz)
+#   Brown 2003, Mov Disord 18:357 / Kühn 2006, Eur J Neurosci 23:1956 /
+#     Mallet 2008, J Neurosci 28:4795 (beta band 13-30 Hz; see
+#     docs/network_beta_sanity_check.md and rebuild_scope.md §2.2.3)
 #
 # Search-space convention: absolute biophysical units (mS/cm² for
 # conductances, uA/cm² for drives/means/sigmas). All bounds symmetric
@@ -19,6 +21,8 @@ target_cv_stn: 0.4
 target_cv_gpe: 0.35
 target_cv_gpi: 0.20
 beta_threshold: 0.05    # healthy: STN beta fraction must be < 0.05
+beta_band: [13.0, 30.0]
+broadband: [1.0, 100.0]
 
 # Network sizes (optimization defaults, AGENTS.md §4.5)
 n_stn: 100

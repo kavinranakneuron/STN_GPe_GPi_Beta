@@ -233,7 +233,7 @@ Six phases. Each has explicit entry conditions, deliverables, and exit condition
    - Simulation: 400 ms with 100 ms burn-in
    - Trials: 1500 (headline run)
    - Targets: STN 20 Hz, GPe 65 Hz, GPi 67 Hz; CV 0.4/0.35/0.20; beta < 0.05 in 8-15 Hz
-   - Source citations: Tachibana et al. 2014 (rates), Stein & Bar-Gad 2013 (band)
+   - Source citations: Tachibana et al. 2014 (rates), Brown 2003 / Kühn et al. 2006 / Mallet et al. 2008 (band)
    - Search bounds (all symmetric for healthy):
      - Synaptic conductances: 0.005–0.5 mS/cm² each (4 params)
      - Tonic drives: -5 to +5 µA/cm² each (3 params)
@@ -446,9 +446,22 @@ Order-of-magnitude only. CV gets w_cv = 0.2 in the objective.
 
 ### 4.3 Beta band
 
-**8–15 Hz**, primate "low-beta." Citation: Tachibana et al. 2014; Stein & Bar-Gad 2013; Devergnas et al. 2014.
+**13–30 Hz** ("PD beta"). Citation: Brown 2003; Kühn et al. 2006; Mallet et al. 2008.
 
-Constraint thresholds:
+The choice is based on the Phase 2 / Phase 3 entry sanity check
+(`docs/network_beta_sanity_check.md`): under literature-canonical
+synaptic time constants and delays from the Terman-Rubin lineage, the
+STN-GPe loop spontaneously oscillates at 15–25 Hz (peak 19.5 Hz in the
+hand-tuned strong-coupling test). 13–30 Hz aligns with the broader PD
+beta literature (the human-clinical convention) and with the natural
+oscillation frequency of the model lineage; forcing the model into the
+narrower 8–15 Hz primate "low-beta" band would require non-canonical
+synaptic time constants or delays — exactly the kind of model tuning
+this rebuild avoids. The all-primate firing-rate targets (Tachibana
+et al. 2014, §4.1) are unaffected; only the band-frequency choice
+reflects the model's intrinsic dynamics under canonical parameters.
+
+Constraint thresholds (unchanged):
 - Healthy: STN beta fraction < 0.05
 - PD: STN beta fraction > 0.15
 
@@ -513,6 +526,9 @@ When you reference biological values in code comments or YAML configs, use these
 - Bergman et al. 1994: `# Bergman et al. 1994, J Neurophysiol 72(2):507-520`
 - Stein & Bar-Gad 2013: `# Stein & Bar-Gad 2013, Exp Neurol 245:52-59`
 - Devergnas et al. 2014: `# Devergnas et al. 2014, Neurobiol Dis 68:156-166`
+- Brown 2003: `# Brown 2003, Mov Disord 18(4):357-363`
+- Kühn et al. 2006: `# Kühn et al. 2006, Eur J Neurosci 23:1956-1960`
+- Mallet et al. 2008: `# Mallet et al. 2008, J Neurosci 28(18):4795-4806`
 - Rubin & Terman 2004: `# Rubin & Terman 2004, J Comput Neurosci 16(3):211-235`
 - Terman et al. 2002: `# Terman et al. 2002, J Neurosci 22:2963-2976`
 - Gillies & Willshaw 2006: `# Gillies & Willshaw 2006, J Neurophysiol 95(4):2352-2365` (considered but not used; see Phase 1.5)

@@ -196,7 +196,10 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
                                      ou_seed=cfg.ou_seed_base + trial.number)
         try:
             sim = simulate(net_cfg, cfg.duration_ms)
-            metrics = metrics_from_sim(sim, burn_in_ms=cfg.burn_in_ms)
+            metrics = metrics_from_sim(
+                sim, burn_in_ms=cfg.burn_in_ms,
+                beta_band=cfg.beta_band, broadband=cfg.broadband,
+            )
         except Exception as e:
             n_failed += 1
             logger.warning("trial %d simulation failed: %r", trial.number, e)

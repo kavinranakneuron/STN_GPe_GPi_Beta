@@ -14,7 +14,7 @@ Conventions
   in AGENTS.md §4.7).
 - LFP proxies are time series sampled on the simulation grid (or on a
   coarser bin grid for the firing-rate proxy).
-- Beta fraction follows AGENTS.md §4.3: power in [8, 15] Hz divided by
+- Beta fraction follows AGENTS.md §4.3: power in [13, 30] Hz divided by
   power in [1, 100] Hz, after DC removal, via Welch's method.
 
 Why these primitives
@@ -131,7 +131,7 @@ def population_rate_proxy(spikes: np.ndarray, dt_ms: float,
 # ---------------------------------------------------------------------------
 
 def beta_fraction(trace: np.ndarray, sample_dt_ms: float,
-                  beta_band: tuple[float, float] = (8.0, 15.0),
+                  beta_band: tuple[float, float] = (13.0, 30.0),
                   broadband: tuple[float, float] = (1.0, 100.0)
                   ) -> tuple[float, np.ndarray, np.ndarray]:
     """Fraction of power in the beta band relative to broadband.
@@ -175,7 +175,7 @@ def beta_fraction(trace: np.ndarray, sample_dt_ms: float,
 def population_summary(spikes: np.ndarray, dt_ms: float,
                        burn_in_ms: float = 100.0,
                        bin_ms: float = 1.0,
-                       beta_band: tuple[float, float] = (8.0, 15.0),
+                       beta_band: tuple[float, float] = (13.0, 30.0),
                        broadband: tuple[float, float] = (1.0, 100.0)
                        ) -> dict:
     """Compute rate, CV, population-rate proxy, and beta fraction in one pass."""

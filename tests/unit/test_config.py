@@ -109,3 +109,33 @@ def test_bound_names_count_is_thirteen():
     """The 13-parameter search space (4 conductances + 3 drives + 3 mus + 3 sigmas)."""
     bounds = StudyConfig(name="x", condition="healthy").bounds
     assert len(bounds.names()) == 13
+
+
+# ---------------------------------------------------------------------------
+# beta_band wiring
+# ---------------------------------------------------------------------------
+
+def test_beta_band_default_is_13_30():
+    """Default band picked in §2.2.3 of the rebuild scope."""
+    cfg = from_dict(_minimal_dict())
+    assert cfg.beta_band == (13.0, 30.0)
+    assert cfg.broadband == (1.0, 100.0)
+
+
+def test_beta_band_yaml_list_roundtrips_as_tuple(tmp_path: Path):
+    cfg = from_dict(_minimal_dict(beta_band=[8.0, 15.0]))
+    assert cfg.beta_band == (8.0, 15.0)
+    yaml_path = tmp_path / "study.yaml"
+    write_yaml(cfg, yaml_path)
+    cfg_back = from_yaml(yaml_path)
+    assert cfg_back.beta_band == (8.0, 15.0)
+
+
+def test_beta_band_invalid_raises():
+    with pytest.raises(ValueError, match=r"beta_band low"):
+        from_dict(_minimal_dict(beta_band=[15.0, 8.0]))
+
+
+def test_broadband_invalid_raises():
+    with pytest.raises(ValueError, match=r"broadband low"):
+        from_dict(_minimal_dict(broadband=[100.0, 1.0]))

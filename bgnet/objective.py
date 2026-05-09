@@ -10,7 +10,7 @@ Defaults: w_rate = 1.0, w_cv = 0.2. CV is intentionally a soft term
 (low weight) per the rebuild scope decision: CV targets are
 order-of-magnitude estimates, not measured numbers.
 
-Beta band [8, 15] Hz fraction is treated as a **constraint**, not a loss
+Beta band [13, 30] Hz fraction is treated as a **constraint**, not a loss
 term, to avoid the "bounded-value target" failure mode of the original
 paper (over-prioritization of a flat metric at the expense of rates).
 Optuna treats constraint values <= 0 as feasible, > 0 as infeasible.
@@ -109,16 +109,21 @@ class TrialMetrics:
 
 
 def metrics_from_sim(sim_output: dict, burn_in_ms: float = 100.0,
-                     proxy_bin_ms: float = 1.0) -> TrialMetrics:
+                     proxy_bin_ms: float = 1.0,
+                     beta_band: tuple[float, float] = (13.0, 30.0),
+                     broadband: tuple[float, float] = (1.0, 100.0)
+                     ) -> TrialMetrics:
     """Compute per-population rate, CV, and STN beta fraction from one
-    ``bgnet.network.simulate`` output."""
+    ``bgnet.network.simulate`` output. The default ``beta_band`` matches
+    AGENTS.md §4.3 (13-30 Hz)."""
     dt_ms = sim_output["dt_ms"]
     sp_stn = np.asarray(sim_output["spikes_stn"])
     sp_gpe = np.asarray(sim_output["spikes_gpe"])
     sp_gpi = np.asarray(sim_output["spikes_gpi"])
     proxy_stn, bin_dt = population_rate_proxy(sp_stn, dt_ms, proxy_bin_ms,
                                               burn_in_ms)
-    beta_stn, _, _ = beta_fraction(proxy_stn, bin_dt)
+    beta_stn, _, _ = beta_fraction(proxy_stn, bin_dt,
+                                   beta_band=beta_band, broadband=broadband)
     return TrialMetrics(
         rate_stn=firing_rate(sp_stn, dt_ms, burn_in_ms),
         rate_gpe=firing_rate(sp_gpe, dt_ms, burn_in_ms),

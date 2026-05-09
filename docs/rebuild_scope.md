@@ -63,7 +63,7 @@ The case for all-primate:
 
 - **Internal consistency.** A single species, a single experimental paradigm, a single recording context. Healthy and PD targets come from the same data lineage with before/after recordings in the same animals.
 - **Convention.** Every major STN-GPe-GPi computational model — Rubin and Terman (2004), Hahn and McIntyre (2010), Kumaravelu et al. (2016), Ebert et al. (2014) — anchors to primate MPTP. The rebuild follows this convention.
-- **Beta-band cleanliness.** Primate MPTP literature consistently reports increased oscillatory power in the 8–15 Hz range (Stein and Bar-Gad, 2013; Devergnas et al., 2014; Tachibana et al., 2014). Anchoring to primate lets us use the primate-native band rather than awkwardly mapping primate 8-15 Hz onto human 13-30 Hz.
+- **Beta-band convention.** Primate MPTP literature reports increased oscillatory power in the 8–15 Hz "low-beta" range (Stein and Bar-Gad, 2013; Devergnas et al., 2014; Tachibana et al., 2014); the broader human-clinical literature uses 13–30 Hz (Brown, 2003; Kühn et al., 2006; Mallet et al., 2008). The rebuild uses 13–30 Hz to match the natural oscillation frequency of the model lineage; rationale and pre-Phase-3 sanity check in §2.2.3.
 - **The translational gap is honestly disclosed.** "We use primate MPTP data because that is where the clean before/after data exists. Translation to human PD is the subject of separate work." This is defensible and matches how the field operates.
 
 The downstream patient-fitting paper will anchor to human PD data and will explicitly bridge the species gap — but that is the next paper's problem, not this paper's problem.
@@ -85,16 +85,18 @@ The PD GPi target of 63 Hz is the most consequential change relative to the orig
 
 CV targets are approximate. Quantitative CV values are rarely tabulated in the primate literature, which more commonly reports burst proportions (Bergman et al., 1994; Soares et al., 2004; Wichmann and Soares, 2006). The targets above are order-of-magnitude estimates capturing the qualitative pattern of increased ISI variability in PD. CV is included as a soft constraint (low weight in the objective) so the optimizer cannot satisfy rate targets via tonic-locked firing without irregularity.
 
-#### 2.2.3 Beta band: 8–15 Hz, treated as a constraint
+#### 2.2.3 Beta band: 13–30 Hz, treated as a constraint
 
-The current paper uses 13–30 Hz throughout while citing primate firing-rate data. This is an internal inconsistency: primate MPTP studies consistently identify the relevant oscillation band as 8–15 Hz, not 13–30 Hz. Tachibana et al. (2014) explicitly state: "the mean power of the 8–15 Hz (low-β) oscillations was increased in the GPi/GPe and STN, whereas there were no consistent changes in the 3–8 Hz and 15–30 Hz (high-β) oscillations." Stein and Bar-Gad (2013) review this discrepancy and propose primate 8–15 Hz as the homolog of human 13–30 Hz beta. Devergnas et al. (2014) and Connolly et al. (2015) confirm the species difference.
+We define the beta band as **[13, 30] Hz**, consistent with the broader PD literature (Brown, 2003; Kühn et al., 2006; Mallet et al., 2008) and matching the natural oscillation frequency of the STN–GPe loop under canonical synaptic time constants of the Terman–Rubin lineage. The all-primate firing-rate targets (Tachibana et al., 2014; §2.2.2) are retained; the band-frequency choice reflects the model's intrinsic dynamics under literature-canonical parameters.
 
-The rebuild uses **8–15 Hz** as the beta band. This is the cleanest primate-anchored choice. It overlaps slightly with primate alpha but captures the strongest signal in MPTP literature. Citation: Stein and Bar-Gad (2013), Devergnas et al. (2014), Tachibana et al. (2014).
+This is a deliberate departure from the primate "low-beta" 8–15 Hz convention (Stein and Bar-Gad, 2013; Devergnas et al., 2014; Tachibana et al., 2014). The pre-Phase-3 sanity check (`docs/network_beta_sanity_check.md`) demonstrated that under literature-strong PD-direction coupling the rebuild's STN–GPe loop oscillates spontaneously at 19.5 Hz with 0.60 of broadband power in [13, 30] Hz and essentially 0 in [8, 15] Hz. The same loop frequency is reported across the model lineage — Rubin and Terman (2004), Hahn and McIntyre (2010), Kumaravelu et al. (2016), Ebert et al. (2014) — and arises from the canonical synaptic time constants and conduction delays. Forcing the model into the narrower 8–15 Hz primate band would require non-canonical synaptic time constants or delays, which is exactly the kind of model-tuning this rebuild is built to avoid.
+
+The framing is honest: we define beta per the human clinical/literature convention, our model produces oscillations in that range under canonical parameters, and we do not claim to reproduce the narrower primate 8–15 Hz signal specifically. The species-translation gap (which this paper is not trying to bridge) is acknowledged in the manuscript Discussion.
 
 The original paper framed beta as a value target with bounds: penalty if outside [0.20, 0.40] of total spectral power. With this formulation and a high penalty weight, the optimizer over-prioritized beta at the expense of firing rate accuracy. The rebuild instead treats beta as a **constraint**, not an objective term. Optuna's CMA-ES sampler supports trial constraints; we will compute STN beta fraction and either accept (beta condition satisfied) or reject (penalty applied) the trial accordingly.
 
 Specifically:
-- Healthy condition: STN beta fraction (8–15 Hz / 1–100 Hz) < 0.05
+- Healthy condition: STN beta fraction (13–30 Hz / 1–100 Hz) < 0.05
 - Parkinsonian condition: STN beta fraction > 0.15
 
 This directly matches the biological story — PD is *defined by* elevated beta; given that, what configuration also matches firing rates? — and avoids the weight-tuning problem of weighted-sum scalarization.
@@ -275,6 +277,8 @@ Bevan, M. D., and Wilson, C. J. (1999). Mechanisms underlying spontaneous oscill
 
 Boraud, T., Bezard, E., Bioulac, B., and Gross, C. E. (2002). From single extracellular unit recording in experimental and human Parkinsonism to the development of a functional concept of the role played by the basal ganglia in motor control. *Progress in Neurobiology*, 66(4), 265–283.
 
+Brown, P. (2003). Oscillatory nature of human basal ganglia activity: relationship to the pathophysiology of Parkinson's disease. *Movement Disorders*, 18(4), 357–363.
+
 Carlson, K. D., Nageswaran, J. M., Dutt, N., and Krichmar, J. L. (2014). An efficient automated parameter tuning framework for spiking neural networks. *Frontiers in Neuroscience*, 8, 10.
 
 Connolly, A. T., Jensen, A. L., Bello, E. M., Netoff, T. I., Baker, K. B., Johnson, M. D., and Vitek, J. L. (2015). Modulations in oscillatory frequency and coupling in globus pallidus with increasing parkinsonian severity. *Journal of Neuroscience*, 35(15), 6231–6240.
@@ -296,6 +300,8 @@ Hahn, P. J., and McIntyre, C. C. (2010). Modeling shifts in the rate and pattern
 Hansen, N. (2016). The CMA evolution strategy: a tutorial. *arXiv:1604.00772*.
 
 Hutchison, W. D., Lozano, A. M., Tasker, R. R., Lang, A. E., and Dostrovsky, J. O. (1998). Identification and characterization of neurons with tremor-frequency activity in human globus pallidus. *Experimental Brain Research*, 113(3), 557–563.
+
+Kühn, A. A., Kupsch, A., Schneider, G.-H., and Brown, P. (2006). Reduction in subthalamic 8–35 Hz oscillatory activity correlates with clinical improvement in Parkinson's disease. *European Journal of Neuroscience*, 23(7), 1956–1960.
 
 Kumaravelu, K., Brocker, D. T., and Grill, W. M. (2016). A biophysical model of the cortex-basal ganglia-thalamic network in the 6-OHDA lesioned rat model of Parkinson's disease. *Journal of Computational Neuroscience*, 40(2), 207–229.
 

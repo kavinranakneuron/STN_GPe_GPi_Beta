@@ -10,6 +10,8 @@ target_cv_stn: 0.6
 target_cv_gpe: 0.40
 target_cv_gpi: 0.30
 beta_threshold: 0.15
+beta_band: [13.0, 30.0]
+broadband: [1.0, 100.0]
 
 n_stn: 100
 n_gpe: 200
