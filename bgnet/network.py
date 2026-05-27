@@ -207,6 +207,15 @@ def simulate(cfg: NetworkConfig, duration_ms: float) -> dict:
         "spikes_stn": outputs["sp_stn"],   # (n_steps, n_stn) bool
         "spikes_gpe": outputs["sp_gpe"],
         "spikes_gpi": outputs["sp_gpi"],
+        # Per-population mean V and mean I_syn over time (n_steps,) — the
+        # raw signals from which the Vm and synaptic-current LFP proxies
+        # are computed downstream in bgnet.observables.
+        "vmean_stn": outputs["vmean_stn"],
+        "vmean_gpe": outputs["vmean_gpe"],
+        "vmean_gpi": outputs["vmean_gpi"],
+        "isyn_mean_stn": outputs["isyn_mean_stn"],
+        "isyn_mean_gpe": outputs["isyn_mean_gpe"],
+        "isyn_mean_gpi": outputs["isyn_mean_gpi"],
         "final_state": final,
         "n_steps": n_steps,
         "dt_ms": cfg.dt_ms,

@@ -38,9 +38,17 @@ from typing import Literal
 
 import numpy as np
 
-from bgnet.observables import beta_fraction, cv_isi, firing_rate, population_rate_proxy
+from bgnet.observables import (
+    beta_fraction,
+    cv_isi,
+    firing_rate,
+    population_rate_proxy,
+    synaptic_current_lfp_proxy,
+    vm_lfp_proxy,
+)
 
 ConditionType = Literal["healthy", "pd"]
+LFPProxyKind = Literal["vm", "population_rate", "synaptic_current"]
 
 
 # ---------------------------------------------------------------------------
@@ -108,20 +116,54 @@ class TrialMetrics:
         }
 
 
+def _stn_proxy_trace(sim_output: dict, proxy: LFPProxyKind,
+                     burn_in_ms: float, bin_ms: float,
+                     hp_cutoff_hz: float, hp_order: int
+                     ) -> tuple[np.ndarray, float]:
+    """Pick the STN LFP-proxy trace + sample dt based on ``proxy``."""
+    dt_ms = sim_output["dt_ms"]
+    if proxy == "vm":
+        vmean = np.asarray(sim_output["vmean_stn"])
+        return vm_lfp_proxy(vmean, dt_ms, burn_in_ms, bin_ms,
+                            hp_cutoff_hz, hp_order)
+    if proxy == "population_rate":
+        sp = np.asarray(sim_output["spikes_stn"])
+        return population_rate_proxy(sp, dt_ms, bin_ms, burn_in_ms)
+    if proxy == "synaptic_current":
+        isyn = np.asarray(sim_output["isyn_mean_stn"])
+        return synaptic_current_lfp_proxy(isyn, dt_ms, burn_in_ms, bin_ms,
+                                          hp_cutoff_hz, hp_order)
+    raise ValueError(
+        f"unknown lfp_proxy {proxy!r}; expected 'vm', 'population_rate', "
+        f"or 'synaptic_current'")
+
+
 def metrics_from_sim(sim_output: dict, burn_in_ms: float = 100.0,
                      proxy_bin_ms: float = 1.0,
                      beta_band: tuple[float, float] = (13.0, 30.0),
-                     broadband: tuple[float, float] = (1.0, 100.0)
+                     broadband: tuple[float, float] = (1.0, 100.0),
+                     lfp_proxy: LFPProxyKind = "vm",
+                     hp_cutoff_hz: float = 2.0, hp_order: int = 4,
                      ) -> TrialMetrics:
-    """Compute per-population rate, CV, and STN beta fraction from one
-    ``bgnet.network.simulate`` output. The default ``beta_band`` matches
-    AGENTS.md §4.3 (13-30 Hz)."""
+    """Compute per-population rate, CV, and STN β fraction from one
+    ``bgnet.network.simulate`` output.
+
+    The β fraction is computed from the LFP proxy selected by
+    ``lfp_proxy`` (default ``"vm"`` — high-pass-filtered mean Vm). The
+    ``"population_rate"`` alternate reproduces the pre-rebuild proxy and
+    is kept for the LFP-proxy-comparison validation. The
+    ``"synaptic_current"`` alternate is also available.
+
+    Default ``beta_band`` matches AGENTS.md §4.3 (13-30 Hz).
+    """
     dt_ms = sim_output["dt_ms"]
     sp_stn = np.asarray(sim_output["spikes_stn"])
     sp_gpe = np.asarray(sim_output["spikes_gpe"])
     sp_gpi = np.asarray(sim_output["spikes_gpi"])
-    proxy_stn, bin_dt = population_rate_proxy(sp_stn, dt_ms, proxy_bin_ms,
-                                              burn_in_ms)
+    proxy_stn, bin_dt = _stn_proxy_trace(
+        sim_output, lfp_proxy, burn_in_ms, proxy_bin_ms,
+        hp_cutoff_hz, hp_order,
+    )
     beta_stn, _, _ = beta_fraction(proxy_stn, bin_dt,
                                    beta_band=beta_band, broadband=broadband)
     return TrialMetrics(

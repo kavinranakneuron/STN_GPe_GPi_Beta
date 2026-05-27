@@ -209,7 +209,21 @@ def _step(state: NetworkState, t_ms: float, sp: StaticParams) -> tuple[NetworkSt
         buf_stn_spikes=new_buf_stn,
         buf_gpe_spikes=new_buf_gpe,
     )
-    return new_state, {"sp_stn": sp_stn, "sp_gpe": sp_gpe, "sp_gpi": sp_gpi}
+    # Per-step population means used by the LFP-proxy pipeline. Mean V is
+    # the primary proxy (filtered → β fraction); mean I_syn is kept as an
+    # alternate proxy. Each is a scalar per step → negligible memory vs.
+    # spike arrays. Mean V uses the *post-step* voltage; I_syn is the
+    # pre-step current that drove this step (computed from the current
+    # synapse state, before synapse_step advances it).
+    return new_state, {
+        "sp_stn": sp_stn, "sp_gpe": sp_gpe, "sp_gpi": sp_gpi,
+        "vmean_stn": jnp.mean(new_stn.V),
+        "vmean_gpe": jnp.mean(new_gpe.V),
+        "vmean_gpi": jnp.mean(new_gpi.V),
+        "isyn_mean_stn": jnp.mean(I_syn_stn),
+        "isyn_mean_gpe": jnp.mean(I_syn_gpe),
+        "isyn_mean_gpi": jnp.mean(I_syn_gpi),
+    }
 
 
 # ---------------------------------------------------------------------------

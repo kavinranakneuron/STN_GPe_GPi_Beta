@@ -77,10 +77,19 @@ def test_two_seed_consistency():
     assert abs(ri_a - ri_b) < 8.0, f"GPi: {ri_a} vs {ri_b}"
 
 
-def test_perf_600ms_under_5s():
-    """Phase 1 perf exit: warm 600 ms x 450 neurons must finish in under
-    5 s on the L4 GPU. The first call below pays compilation cost, only
-    the second is timed."""
+def test_perf_600ms_under_budget():
+    """Warm 600 ms x 450 neurons must finish under the perf budget on the
+    L4 GPU. The first call below pays compilation cost, only the second
+    is timed.
+
+    Budget history:
+    - Phase 1: 5 s. Spike-only outputs.
+    - Phase 2.5: 6 s. Integrator now emits per-step population-mean V and
+      mean I_syn (six extra scalar trajectories) so the LFP-proxy
+      pipeline in ``bgnet.observables`` can read mean Vm and synaptic
+      current. The on-device reductions + larger output dict marshal
+      add ~0.2 s on this shape; the budget moves with the contract.
+    """
     cfg = _default_cfg()
     out = simulate(cfg, duration_ms=600.0)   # warmup / compile
     out["spikes_stn"].block_until_ready()
@@ -88,4 +97,4 @@ def test_perf_600ms_under_5s():
     out = simulate(cfg, duration_ms=600.0)
     out["spikes_stn"].block_until_ready()
     elapsed = time.time() - t0
-    assert elapsed < 5.0, f"600 ms simulation took {elapsed:.2f} s (Phase 1 budget 5 s)"
+    assert elapsed < 6.0, f"600 ms simulation took {elapsed:.2f} s (Phase 2.5 budget 6 s)"

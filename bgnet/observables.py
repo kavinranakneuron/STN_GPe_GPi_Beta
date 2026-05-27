@@ -13,21 +13,24 @@ Conventions
   analysis window. Default is 100 ms (matches the optimization burn-in
   in AGENTS.md §4.7).
 - LFP proxies are time series sampled on the simulation grid (or on a
-  coarser bin grid for the firing-rate proxy).
+  coarser bin grid for the rate and Vm proxies).
 - Beta fraction follows AGENTS.md §4.3: power in [13, 30] Hz divided by
   power in [1, 100] Hz, after DC removal, via Welch's method.
 
-Why these primitives
---------------------
-Three LFP proxies are computed (population firing rate, mean Vm,
-synaptic-current sum) so a downstream "LFP proxy comparison" study
-(scripts/11) can show that the beta-fraction conclusions are robust to
-proxy choice. Population firing rate is the *primary* proxy used by
-the optimizer's constraint, per `docs/rebuild_scope.md` §2.2.9.
+Three LFP proxies are exposed:
+- ``vm_lfp_proxy`` (primary) — high-pass-filtered per-step mean Vm.
+  Captures sub-threshold synchrony; asynchronous firing at a given rate
+  has low β fraction even if that rate falls inside the β band.
+  See ``docs/silent_stn_diagnostics.md`` for why population-rate was
+  abandoned as primary.
+- ``population_rate_proxy`` (alternate) — population spike rate. Kept for
+  the LFP-proxy-comparison validation study.
+- ``synaptic_current_lfp_proxy`` (alternate) — high-pass-filtered mean
+  synaptic current. Kept as a second alternate.
 
 Citations:
     # Welch 1967, IEEE Trans Audio Electroacoust 15:70-73
-    # Mallet et al. 2008, J Neurosci 28(18):4795-4806 (population rate as LFP proxy)
+    # Mallet et al. 2008, J Neurosci 28(18):4795-4806 (mean Vm as LFP proxy)
 """
 from __future__ import annotations
 
@@ -127,6 +130,107 @@ def population_rate_proxy(spikes: np.ndarray, dt_ms: float,
 
 
 # ---------------------------------------------------------------------------
+# Mean Vm LFP proxy (primary) — high-pass filtered, 1 ms bins
+# ---------------------------------------------------------------------------
+
+def _bin_average_1d(trace: np.ndarray, dt_ms: float, bin_ms: float
+                    ) -> tuple[np.ndarray, float]:
+    """Average a per-step 1-D trace down into ``bin_ms``-wide bins.
+
+    Returns ``(binned, bin_dt_ms)``. If the input is shorter than one
+    bin, returns an empty array and the requested bin width.
+    """
+    steps_per_bin = max(1, int(round(bin_ms / dt_ms)))
+    n_bins = trace.shape[0] // steps_per_bin
+    if n_bins == 0:
+        return np.zeros(0), steps_per_bin * dt_ms
+    trimmed = trace[:n_bins * steps_per_bin]
+    binned = trimmed.reshape(n_bins, steps_per_bin).mean(axis=1)
+    return binned.astype(np.float64), steps_per_bin * dt_ms
+
+
+def _highpass(trace: np.ndarray, sample_dt_ms: float,
+              cutoff_hz: float, order: int) -> np.ndarray:
+    """Zero-phase Butterworth high-pass via SOS + filtfilt.
+
+    Removes the DC offset (subtract mean) before filtering to keep the
+    filter in a well-conditioned regime. Returns the input unchanged if
+    the trace is too short for filtfilt's padding requirements.
+    """
+    centered = trace - trace.mean()
+    fs = 1000.0 / sample_dt_ms
+    nyq = 0.5 * fs
+    Wn = cutoff_hz / nyq
+    if not (0.0 < Wn < 1.0):
+        # Degenerate cutoff (e.g. > Nyquist or <= 0): return centered trace.
+        return centered
+    sos = signal.butter(order, Wn, btype="highpass", output="sos")
+    # filtfilt padlen is 3 * len(sos[0]) per section by default; require a
+    # safety margin so very short windows don't trip a ValueError.
+    min_len = 3 * (2 * order) + 1
+    if centered.shape[0] < min_len:
+        return centered
+    return signal.sosfiltfilt(sos, centered)
+
+
+def vm_lfp_proxy(v_mean_trace: np.ndarray, dt_ms: float,
+                 burn_in_ms: float = 100.0, bin_ms: float = 1.0,
+                 hp_cutoff_hz: float = 2.0, hp_order: int = 4
+                 ) -> tuple[np.ndarray, float]:
+    """High-pass-filtered per-step mean Vm — primary LFP proxy.
+
+    The integrator emits ``mean(V_pop)`` per step (a scalar). This function
+    discards the burn-in transient, averages into ``bin_ms`` bins (default
+    1 ms, matching the rate proxy), and applies a zero-phase Butterworth
+    high-pass at ``hp_cutoff_hz`` (default 2 Hz, order 4) to remove drift.
+    Returns ``(filtered_trace, sample_dt_ms)``.
+
+    Why filter? Mean Vm drifts (sub-threshold network state varies on
+    seconds timescale). Without high-pass the PSD has large DC and
+    sub-1 Hz mass that contaminates the [1, 100] Hz broadband
+    denominator of the β fraction. A 2 Hz cutoff is below the lower
+    edge of any biologically meaningful band, including the lowest β
+    edge at 13 Hz.
+    """
+    trace = np.asarray(v_mean_trace, dtype=np.float64)
+    burn_steps = int(round(burn_in_ms / dt_ms))
+    trace_post = trace[burn_steps:]
+    if trace_post.size == 0:
+        return np.zeros(0), bin_ms
+    binned, sample_dt_ms = _bin_average_1d(trace_post, dt_ms, bin_ms)
+    if binned.size == 0:
+        return binned, sample_dt_ms
+    filtered = _highpass(binned, sample_dt_ms, hp_cutoff_hz, hp_order)
+    return filtered, sample_dt_ms
+
+
+# ---------------------------------------------------------------------------
+# Synaptic-current LFP proxy (alternate)
+# ---------------------------------------------------------------------------
+
+def synaptic_current_lfp_proxy(isyn_mean_trace: np.ndarray, dt_ms: float,
+                               burn_in_ms: float = 100.0, bin_ms: float = 1.0,
+                               hp_cutoff_hz: float = 2.0, hp_order: int = 4
+                               ) -> tuple[np.ndarray, float]:
+    """High-pass-filtered per-step mean synaptic current — alternate proxy.
+
+    Same pipeline as ``vm_lfp_proxy`` but on the synaptic current the
+    integrator records per step. Kept as a fallback for the LFP-proxy
+    comparison study (see ``docs/silent_stn_diagnostics.md``).
+    """
+    trace = np.asarray(isyn_mean_trace, dtype=np.float64)
+    burn_steps = int(round(burn_in_ms / dt_ms))
+    trace_post = trace[burn_steps:]
+    if trace_post.size == 0:
+        return np.zeros(0), bin_ms
+    binned, sample_dt_ms = _bin_average_1d(trace_post, dt_ms, bin_ms)
+    if binned.size == 0:
+        return binned, sample_dt_ms
+    filtered = _highpass(binned, sample_dt_ms, hp_cutoff_hz, hp_order)
+    return filtered, sample_dt_ms
+
+
+# ---------------------------------------------------------------------------
 # Beta fraction via Welch
 # ---------------------------------------------------------------------------
 
@@ -176,19 +280,58 @@ def population_summary(spikes: np.ndarray, dt_ms: float,
                        burn_in_ms: float = 100.0,
                        bin_ms: float = 1.0,
                        beta_band: tuple[float, float] = (13.0, 30.0),
-                       broadband: tuple[float, float] = (1.0, 100.0)
+                       broadband: tuple[float, float] = (1.0, 100.0),
+                       vmean_trace: np.ndarray | None = None,
+                       isyn_mean_trace: np.ndarray | None = None,
+                       proxy: str = "vm",
+                       hp_cutoff_hz: float = 2.0, hp_order: int = 4,
                        ) -> dict:
-    """Compute rate, CV, population-rate proxy, and beta fraction in one pass."""
+    """Compute rate, CV, the chosen LFP proxy, and β fraction in one pass.
+
+    ``proxy`` selects which signal feeds the β-fraction computation:
+    - ``"vm"`` (default) — uses ``vmean_trace``. Required when chosen.
+    - ``"population_rate"`` — uses the spike-derived rate proxy.
+    - ``"synaptic_current"`` — uses ``isyn_mean_trace``. Required when chosen.
+
+    Diagnostics that want the rate trace alongside the chosen β can pass
+    spikes and read ``rate_trace`` from the return regardless of which
+    proxy fed the β fraction.
+    """
     rate = firing_rate(spikes, dt_ms, burn_in_ms)
     cv = cv_isi(spikes, dt_ms, burn_in_ms)
-    proxy, bin_dt = population_rate_proxy(spikes, dt_ms, bin_ms, burn_in_ms)
-    beta, freqs, psd = beta_fraction(proxy, bin_dt, beta_band, broadband)
+    rate_trace, rate_bin_dt = population_rate_proxy(spikes, dt_ms, bin_ms, burn_in_ms)
+
+    if proxy == "vm":
+        if vmean_trace is None:
+            raise ValueError("population_summary(proxy='vm') requires vmean_trace")
+        trace, sample_dt = vm_lfp_proxy(vmean_trace, dt_ms, burn_in_ms,
+                                        bin_ms, hp_cutoff_hz, hp_order)
+    elif proxy == "population_rate":
+        trace, sample_dt = rate_trace, rate_bin_dt
+    elif proxy == "synaptic_current":
+        if isyn_mean_trace is None:
+            raise ValueError(
+                "population_summary(proxy='synaptic_current') requires isyn_mean_trace")
+        trace, sample_dt = synaptic_current_lfp_proxy(
+            isyn_mean_trace, dt_ms, burn_in_ms, bin_ms,
+            hp_cutoff_hz, hp_order)
+    else:
+        raise ValueError(
+            f"unknown proxy {proxy!r}; expected 'vm', 'population_rate', "
+            f"or 'synaptic_current'")
+
+    beta, freqs, psd = beta_fraction(trace, sample_dt, beta_band, broadband)
     return {
         "rate_Hz": rate,
         "cv": cv,
         "beta_fraction": beta,
-        "rate_trace": proxy,
-        "trace_dt_ms": bin_dt,
+        "proxy_kind": proxy,
+        "proxy_trace": trace,
+        "trace_dt_ms": sample_dt,
         "psd_freqs": freqs,
         "psd": psd,
+        # Always-computed rate proxy, useful as a sanity reference; the
+        # diagnostic doc uses it to compare against the chosen proxy.
+        "rate_trace": rate_trace,
+        "rate_trace_dt_ms": rate_bin_dt,
     }

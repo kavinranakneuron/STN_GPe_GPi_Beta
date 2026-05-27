@@ -28,6 +28,7 @@ import bgnet
 
 ConditionType = Literal["healthy", "pd"]
 ConstraintMode = Literal["constraint", "penalty"]
+LFPProxyKind = Literal["vm", "population_rate", "synaptic_current"]
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,14 @@ class StudyConfig:
     beta_band: tuple[float, float] = (13.0, 30.0)
     broadband: tuple[float, float] = (1.0, 100.0)
 
+    # LFP proxy feeding the β fraction (and constraint). Default ``"vm"``
+    # = high-pass-filtered mean Vm; see ``docs/silent_stn_diagnostics.md``
+    # for why the population-rate proxy was retired as primary.
+    # Alternates kept for proxy-comparison validation runs.
+    lfp_proxy: LFPProxyKind = "vm"
+    lfp_hp_cutoff_hz: float = 2.0
+    lfp_hp_order: int = 4
+
     # Optimizer
     n_trials: int = 1000
     cma_seed: int = 42                  # CMA-ES sampler seed
@@ -155,6 +164,14 @@ class StudyConfig:
             raise ValueError(f"condition must be 'healthy' or 'pd', got {self.condition!r}")
         if self.constraint_mode not in ("constraint", "penalty"):
             raise ValueError(f"constraint_mode must be 'constraint' or 'penalty'")
+        if self.lfp_proxy not in ("vm", "population_rate", "synaptic_current"):
+            raise ValueError(
+                f"lfp_proxy must be 'vm', 'population_rate', or "
+                f"'synaptic_current'; got {self.lfp_proxy!r}")
+        if self.lfp_hp_cutoff_hz <= 0:
+            raise ValueError("lfp_hp_cutoff_hz must be > 0")
+        if self.lfp_hp_order < 1:
+            raise ValueError("lfp_hp_order must be >= 1")
         if self.n_stn <= 0 or self.n_gpe <= 0 or self.n_gpi <= 0:
             raise ValueError("network sizes must be positive")
         if self.duration_ms <= self.burn_in_ms:

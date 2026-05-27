@@ -199,6 +199,9 @@ def run_study(cfg: StudyConfig, run_dir: RunDir,
             metrics = metrics_from_sim(
                 sim, burn_in_ms=cfg.burn_in_ms,
                 beta_band=cfg.beta_band, broadband=cfg.broadband,
+                lfp_proxy=cfg.lfp_proxy,
+                hp_cutoff_hz=cfg.lfp_hp_cutoff_hz,
+                hp_order=cfg.lfp_hp_order,
             )
         except Exception as e:
             n_failed += 1
