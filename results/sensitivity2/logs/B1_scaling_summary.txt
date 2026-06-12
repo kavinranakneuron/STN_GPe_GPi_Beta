@@ -1,0 +1,5 @@
+450n             H=  1.42s  PD=  1.42s  PD_beta= 45.8%
+1800n            H=  1.49s  PD=  1.49s  PD_beta= 50.2%
+4500n            H=  1.57s  PD=  1.57s  PD_beta= 49.7%
+15000n           H=  2.01s  PD=  2.01s  PD_beta= 49.6%
+45000n           H=  2.96s  PD=  2.96s  PD_beta= 49.2%

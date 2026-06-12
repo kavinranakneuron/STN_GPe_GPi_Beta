@@ -13,6 +13,8 @@ import jax
 import jax.numpy as jnp
 import time
 import pickle
+import argparse
+from pathlib import Path
 
 from jax_models.network_builder import build_network_state
 from optimization.sim_jax import create_simulation_fn
@@ -186,6 +188,12 @@ def objective(trial):
 # =============================================================================
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--output', default='results/optimization/healthy_study.pkl')
+    ap.add_argument('--n-trials', type=int, default=500)
+    args = ap.parse_args()
+
     print("=" * 60)
     print("HH Network Optimization - Healthy State (10 params)")
     print("=" * 60)
@@ -196,18 +204,18 @@ if __name__ == "__main__":
 
     study = optuna.create_study(
         direction='minimize',
-        sampler=CmaEsSampler(seed=42),
+        sampler=CmaEsSampler(seed=args.seed),
         study_name='hh_healthy_450'
     )
 
     t0 = time.time()
-    study.optimize(objective, n_trials=500, show_progress_bar=True)
+    study.optimize(objective, n_trials=args.n_trials, show_progress_bar=False)
     elapsed = time.time() - t0
 
     print("\n" + "=" * 60)
     print("OPTIMIZATION COMPLETE")
     print("=" * 60)
-    print(f"Time: {elapsed/60:.1f} minutes ({elapsed/500*1000:.0f}ms/trial)")
+    print(f"Time: {elapsed/60:.1f} minutes ({elapsed/max(len(study.trials),1)*1000:.0f}ms/trial)")
     print(f"Best score: {study.best_value:.4f}")
 
     print(f"\nBest intrinsic parameters:")
@@ -231,17 +239,23 @@ if __name__ == "__main__":
 
     # Save
     results = {
+        'seed': args.seed,
         'best_params': study.best_params,
         'best_value': study.best_value,
-        'best_metrics': best.user_attrs,
+        'best_metrics': dict(best.user_attrs),
         'targets': TARGETS,
         'weights': WEIGHTS,
         'network_size': (N_STN, N_GPE, N_GPI),
         'n_trials': len(study.trials),
         'elapsed_seconds': elapsed,
+        'all_trials': [
+            {'params': t.params, 'value': t.value, 'user_attrs': dict(t.user_attrs)}
+            for t in study.trials
+        ],
     }
 
-    with open('results/optimization/healthy_study.pkl', 'wb') as f:
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    with open(args.output, 'wb') as f:
         pickle.dump(results, f)
 
-    print(f"\nResults saved to results/optimization/healthy_study.pkl")
+    print(f"\nResults saved to {args.output}")

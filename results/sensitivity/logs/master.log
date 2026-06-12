@@ -1,0 +1,31 @@
+[2026-05-28 00:48:03] ==== Sensitivity sweep run started ====
+[2026-05-28 00:48:03] --- Bounds sweep ---
+[2026-05-28 00:48:03] START: bounds/paper (seed=42)
+[2026-05-28 01:05:05] DONE: bounds/paper -> results/sensitivity/bounds/paper.pkl
+[2026-05-28 01:05:05] START: bounds/symmetric (seed=42)
+[2026-05-28 01:22:04] DONE: bounds/symmetric -> results/sensitivity/bounds/symmetric.pkl
+[2026-05-28 01:22:04] --- Weights sweep ---
+[2026-05-28 01:22:04] START: weights/paper (seed=42)
+[2026-05-28 01:39:00] DONE: weights/paper -> results/sensitivity/weights/paper.pkl
+[2026-05-28 01:39:00] START: weights/low_beta (seed=42)
+[2026-05-28 01:55:59] DONE: weights/low_beta -> results/sensitivity/weights/low_beta.pkl
+[2026-05-28 01:55:59] START: weights/high_beta (seed=42)
+[2026-05-28 02:12:57] DONE: weights/high_beta -> results/sensitivity/weights/high_beta.pkl
+[2026-05-28 02:12:57] START: weights/equal_weights (seed=42)
+[2026-05-28 02:29:55] DONE: weights/equal_weights -> results/sensitivity/weights/equal_weights.pkl
+[2026-05-28 02:29:55] START: weights/no_cv (seed=42)
+[2026-05-28 02:46:54] DONE: weights/no_cv -> results/sensitivity/weights/no_cv.pkl
+[2026-05-28 02:46:54] --- Seeds sweep ---
+[2026-05-28 02:46:54] START: seeds/seed42 (seed=42)
+[2026-05-28 03:03:54] DONE: seeds/seed42 -> results/sensitivity/seeds/seed42.pkl
+[2026-05-28 03:03:54] START: seeds/seed1 (seed=1)
+[2026-05-28 03:20:57] DONE: seeds/seed1 -> results/sensitivity/seeds/seed1.pkl
+[2026-05-28 03:20:57] START: seeds/seed7 (seed=7)
+[2026-05-28 03:37:56] DONE: seeds/seed7 -> results/sensitivity/seeds/seed7.pkl
+[2026-05-28 03:37:56] START: seeds/seed123 (seed=123)
+[2026-05-28 03:54:54] DONE: seeds/seed123 -> results/sensitivity/seeds/seed123.pkl
+[2026-05-28 03:54:54] START: seeds/seed2024 (seed=2024)
+[2026-05-28 04:11:50] DONE: seeds/seed2024 -> results/sensitivity/seeds/seed2024.pkl
+[2026-05-28 04:11:50] ==== All sweeps complete ====
+[2026-05-28 04:11:50] Generating summary...
+[2026-05-28 04:11:50] ==== Done. Summary at results/sensitivity/logs/SUMMARY.txt ====

@@ -1,0 +1,121 @@
+==============================================================================
+JNE-110355 OVERNIGHT SWEEP 2 — READ-ME-FIRST INTERPRETATION
+(Claude, 2026-05-29 ~00:51. Data tables follow below this block.)
+==============================================================================
+All 9 tasks completed; ZERO failures (no *_FAILED.txt). 13/13 sweep pickles
+written. Nothing committed; still on detached submission-jne-110355 (a14f845).
+The bgnet package is not present in this tree and was not touched.
+
+HEADLINE ANSWERS BY REVIEWER POINT
+----------------------------------
+R1.1 (peak beta freq): PD STN PSD peak = 29.3 Hz (metric pipeline, full pop,
+  nperseg=8192). The figure PSD was on a different pipeline (500-neuron
+  subsample, ~20k nperseg) that pinned the peak at the 30 Hz band edge; I
+  UNIFIED the figure pipeline to the metric one, so Fig 5/6A now reports the
+  same 29.3 Hz. Healthy peak = 14.6 Hz (metric). Cite ~29 Hz (high-beta), not 20.
+
+R2.4 (heterogeneity): With 10% per-neuron CONDUCTANCE heterogeneity the PD fit
+  is recovered (loss 0.83, GPe beta 23.8%, STN/GPe rates on target, multipliers
+  SG=3.77/GS=0.17 ~ the homogeneous fit). The beta phenotype is robust to
+  heterogeneity. IMPORTANT: the submitted code had only initial-CONDITION
+  heterogeneity, not conductance heterogeneity. I added conductance
+  heterogeneity as an OPT-IN build flag (het_sigma, default 0.0 -> submitted
+  behaviour byte-identical; new file jax_models/het_support.py). Verified
+  het=0.10 keeps firing rates within +/-2 Hz of homogeneous before sweeping.
+
+R2.4 (connectivity density, 2nd probe): PD beta achievable across 0.5x-1.5x
+  indegree (K_low betaGPe 23.0% loss 0.11; K_default 38.1% loss 0.13; K_high
+  19.6% loss 0.78). Fit degrades at high density but beta is preserved.
+
+R2-minor (OU tau): PD beta robust across tau in {1,5,10,20} ms (betaGPe
+  14-31%). Fit IMPROVES at longer tau (loss 1.73 -> 0.105). Supports the point.
+
+Table 4 (scaling): re-measured 450n = 1.42 s (matches old 1.424 s); PD STN beta
+  ~49% at 45k. Table is internally consistent now.
+
+Stats (Welch): all primary comparisons p<0.001 (STN beta Healthy 0.37% vs PD
+  49.31%). Welch correctly flags GPe beta as ns (4.90 +/- 14.71%, p=0.34) where
+  the equal-variance test would have been mis-specified.
+
+Healthy seeds (symmetric with PD seed sweep): 5 seeds fit STN 17.5-21.2 Hz, all
+  betaGPe <2%, loss 0.11-0.30. Fig 7 schematic now annotates median(range) of
+  each multiplier across the 5 PD and 5 healthy seeds.
+
+** RESOLVED: the "healthy STN 26.4 Hz miss" **
+  The OPTIMIZATION reaches STN ~20 Hz fine: best healthy fit = 21.0 Hz, the
+  overall best-loss trial IS in [18,22] Hz, and all 5 seeds land 17.5-21.2 Hz.
+  The 26.4 Hz figure comes from the hardcoded FIGURE/stat-validation healthy
+  params (ISTN=132.2 set) run at 45k -> STN = 26.26 Hz (see B2 log). So the
+  "miss" is a params/size-pipeline mismatch (optimization 450n STN->20 vs
+  figure params 45k STN->26.3), NOT a loss-landscape limitation. (B4 scatter:
+  results/sensitivity2/healthy_miss_analysis.png.)
+
+NOTES / THINGS TO EYEBALL
+-------------------------
+- results/figures_revised/ also contains a few STALE pre-existing duplicates the
+  copy picked up from results/figures/: fig2_combined.png and
+  fig7_scaling_invariance.png are OLD (May 28) and were NOT regenerated tonight.
+  The current figures are fig1-fig8 + fig7_dbs_effect (timestamps 00:47-00:51).
+  Suggest deleting the two stale duplicates to avoid confusion.
+- run_dbs_simulation.py: removed unused DBS_FREQ=130 and reframed Fig 7 as a
+  "DBS sanity check (informational-lesion form) ... NOT a validation of clinical
+  DBS mechanism" (suptitle + summary box).
+- Spec's PD-seed glob was seeds_seed*.pkl; actual files are seed*.pkl. Corrected
+  in generate_figures.py.
+- New/edited files (uncommitted): jax_models/network_builder.py (+het_sigma,
+  +ou_tau_ms, K globals already module-level), jax_models/het_support.py (new),
+  scripts/{extract_peak_frequencies,sweep_driver_het,sweep_driver_density,
+  sweep_driver_outau,analyze_healthy_miss,summarize_all,master_run2,_verify_het}
+  .py/.sh, and edits to run_healthy_optimization.py, run_statistical_validation.py,
+  generate_figures.py, run_dbs_simulation.py.
+
+==============================================================================
+JNE-110355 OVERNIGHT SWEEP 2 — MASTER SUMMARY
+==============================================================================
+
+[B3] Peak STN PSD frequency (PD):
+  Figure pipeline (500-sub, ~20k nperseg, 2.0 Hz res): 30.0 Hz
+  Metric pipeline (full pop, 8k nperseg,  4.9 Hz res): 29.3 Hz
+  (Healthy: figure 30.0 Hz, metric 14.6 Hz)
+
+[A1] Heterogeneity (10%):
+  loss=0.834 STN=37.1 GPe=42.4 GPi=69.7 betaGPe=23.8% | STN->GPe=3.77 GPe->STN=0.17
+
+[B1] Scaling re-measurement:
+  450n          H= 1.42s  PD= 1.42s  PD STN beta=45.8%
+  1800n         H= 1.49s  PD= 1.49s  PD STN beta=50.2%
+  4500n         H= 1.57s  PD= 1.57s  PD STN beta=49.7%
+  15000n        H= 2.01s  PD= 2.01s  PD STN beta=49.6%
+  45000n        H= 2.96s  PD= 2.96s  PD STN beta=49.2%
+
+[A2] Connectivity density:
+  K_default  loss=0.126 STN=29.2 GPe=42.3 betaGPe=38.1% | SG=3.59 GS=0.17
+  K_low      loss=0.108 STN=27.4 GPe=42.9 betaGPe=23.0% | SG=3.49 GS=0.13
+  K_high     loss=0.776 STN=28.0 GPe=57.0 betaGPe=19.6% | SG=4.31 GS=0.69
+
+[C1] Healthy seeds (n=5):
+  healthy_seed1.pkl: loss=0.110 STN=20.2 GPe=65.7 GPi=85.7 betaGPe=1.5% | SG=1.70 GS=0.82 SGi=1.21 GGi=0.97
+  healthy_seed123.pkl: loss=0.119 STN=20.0 GPe=70.2 GPi=79.6 betaGPe=0.9% | SG=1.69 GS=0.80 SGi=1.28 GGi=1.13
+  healthy_seed2024.pkl: loss=0.212 STN=21.2 GPe=62.7 GPi=79.3 betaGPe=0.6% | SG=1.51 GS=0.70 SGi=1.74 GGi=1.27
+  healthy_seed42.pkl: loss=0.272 STN=21.0 GPe=60.4 GPi=77.5 betaGPe=0.4% | SG=1.15 GS=1.42 SGi=1.55 GGi=1.58
+  healthy_seed7.pkl: loss=0.297 STN=17.5 GPe=61.9 GPi=83.3 betaGPe=0.3% | SG=1.38 GS=1.12 SGi=1.33 GGi=1.34
+  --- multiplier median (min-max) across seeds ---
+    g_stn_gpe_mult  : 1.51 (1.15-1.70)
+    g_gpe_stn_mult  : 0.82 (0.70-1.42)
+    g_stn_gpi_mult  : 1.33 (1.21-1.74)
+    g_gpe_gpi_mult  : 1.27 (0.97-1.58)
+
+[C2] OU tau sensitivity:
+  tau=  1ms  loss=1.729 STN=25.0 GPe=52.5 betaGPe=14.1% | SG=3.38 GS=0.71
+  tau=  5ms  loss=0.368 STN=33.6 GPe=45.9 betaGPe=21.2% | SG=2.99 GS=0.50
+  tau= 10ms  loss=0.118 STN=28.3 GPe=42.1 betaGPe=31.2% | SG=2.98 GS=0.19
+  tau= 20ms  loss=0.105 STN=28.5 GPe=42.7 betaGPe=27.8% | SG=3.19 GS=0.11
+
+[B2] Statistical validation (Welch's t-test): see results/sensitivity2/logs/B2_statval.log
+     and results/figures/fig6_statistical_validation.{png,pdf}
+
+[B4] Healthy STN 20 Hz miss analysis: see results/sensitivity2/logs/B4_healthy_miss.log
+     and results/sensitivity2/healthy_miss_analysis.png
+
+[FIGS] Revised figures in results/figures_revised/
+==============================================================================

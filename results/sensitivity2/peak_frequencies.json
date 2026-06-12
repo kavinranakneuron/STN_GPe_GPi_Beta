@@ -1,0 +1,30 @@
+{
+  "healthy": {
+    "pipeline_figure": {
+      "peak_hz": 30.0,
+      "resolution_hz": 2.0,
+      "nperseg": 20000,
+      "lfp": "500-neuron subsample"
+    },
+    "pipeline_metric": {
+      "peak_hz": 14.6484375,
+      "resolution_hz": 4.8828125,
+      "nperseg": 8192,
+      "lfp": "full population"
+    }
+  },
+  "pd": {
+    "pipeline_figure": {
+      "peak_hz": 30.0,
+      "resolution_hz": 2.0,
+      "nperseg": 20000,
+      "lfp": "500-neuron subsample"
+    },
+    "pipeline_metric": {
+      "peak_hz": 29.296875,
+      "resolution_hz": 4.8828125,
+      "nperseg": 8192,
+      "lfp": "full population"
+    }
+  }
+}

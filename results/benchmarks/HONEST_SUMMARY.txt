@@ -1,0 +1,10 @@
+======================================================================
+HONEST BENCHMARK SUMMARY (450 neurons, 600ms)
+======================================================================
+JAX GPU (JIT+scan)                   1.424s  steps=24000  extrap=False  dev=['cuda:0']
+JAX GPU (no-jit Python loop)      1047.086s  steps=24000  extrap=False  dev=['cuda:0']
+JAX CPU (JIT+scan)                   3.180s  steps=24000  extrap=False  dev=['TFRT_CPU_0']
+----------------------------------------------------------------------
+JIT+fusion speedup (nojit/jit, same GPU, same model): 736x
+GPU-vs-CPU speedup (cpu/gpu, same compiled model):    2.2x
+NumPy/AdEx: see results/benchmarks/numpy_adex_timing.txt (different model, not comparable)

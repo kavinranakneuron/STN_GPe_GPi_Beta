@@ -39,8 +39,6 @@ DT_MS = 0.025
 N_STEPS = 24000  # 600ms
 BURN_STEPS = 4000
 
-DBS_FREQ = 130.0  # Hz (clinical standard)
-
 healthy_params = {
     'ISTN': 132.235, 'I_gpe': 3.039, 'I_gpi': 2.209,
     'noise_stn_sigma': 3.362, 'noise_gpe_sigma': 33.417, 'noise_gpi_sigma': 67.284,
@@ -222,71 +220,60 @@ plt.rcParams.update({
     'axes.linewidth': 1.2,
 })
 
-fig, axes = plt.subplots(2, 3, figsize=(14, 8))
-fig.suptitle(f'Figure 7: DBS Suppresses Beta Oscillations ({N_STN+N_GPE+N_GPI} neurons)',
-             fontsize=14, fontweight='bold')
+fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+fig.suptitle(f'DBS sanity check: modeled intervention abolishes STN beta ({N_STN+N_GPE+N_GPI} neurons)',
+             fontsize=13, fontweight='bold')
 
-# Row 1: Power Spectra (STN primary, GPe/GPi supplementary)
+# Panel [0,0]: STN power spectrum (Healthy / PD OFF / PD+DBS)
+freqs_h, psd_h_stn = psd_h['stn']
+freqs_pd, psd_pd_stn = psd_pd['stn']
+freqs_dbs, psd_dbs_stn = psd_dbs['stn']
+mask = freqs_pd <= 50
+axes[0, 0].semilogy(freqs_h[mask], psd_h_stn[mask], 'b-', label='Healthy', linewidth=1, alpha=0.5)
+axes[0, 0].semilogy(freqs_pd[mask], psd_pd_stn[mask], 'r-', label='PD (DBS OFF)', linewidth=1.5)
+axes[0, 0].semilogy(freqs_dbs[mask], psd_dbs_stn[mask], 'g-', label='PD + DBS (ON)', linewidth=1.5)
+axes[0, 0].axvspan(13, 30, alpha=0.2, color='orange')
+axes[0, 0].set_xlabel('Frequency (Hz)')
+axes[0, 0].set_ylabel('Power (mV^2/Hz)')
+axes[0, 0].set_title(f'STN power spectrum\nBeta: {beta_pd["stn"]*100:.1f}% -> {beta_dbs["stn"]*100:.1f}%')
+axes[0, 0].legend(fontsize=8)
+axes[0, 0].set_xlim(0, 50)
+axes[0, 0].grid(True, alpha=0.3)
+
+# Panel [0,1]: firing rates
 populations = ['stn', 'gpe', 'gpi']
-pop_labels = ['STN (primary)', 'GPe', 'GPi']
-
-for col, (pop, label) in enumerate(zip(populations, pop_labels)):
-    freqs_h, psd_h_pop = psd_h[pop]
-    freqs_pd, psd_pd_pop = psd_pd[pop]
-    freqs_dbs, psd_dbs_pop = psd_dbs[pop]
-    mask = freqs_pd <= 50
-
-    axes[0, col].semilogy(freqs_h[mask], psd_h_pop[mask], 'b-',
-                          label='Healthy', linewidth=1, alpha=0.5)
-    axes[0, col].semilogy(freqs_pd[mask], psd_pd_pop[mask], 'r-',
-                          label='PD (DBS OFF)', linewidth=1.5)
-    axes[0, col].semilogy(freqs_dbs[mask], psd_dbs_pop[mask], 'g-',
-                          label='PD + DBS (ON)', linewidth=1.5)
-    axes[0, col].axvspan(13, 30, alpha=0.2, color='orange')
-    axes[0, col].set_xlabel('Frequency (Hz)')
-    axes[0, col].set_ylabel('Power (mV^2/Hz)')
-    axes[0, col].set_title(f'{label}\nBeta: {beta_pd[pop]*100:.1f}% -> {beta_dbs[pop]*100:.1f}%')
-    axes[0, col].legend(fontsize=8)
-    axes[0, col].set_xlim(0, 50)
-    axes[0, col].grid(True, alpha=0.3)
-
-# Row 2: Bar charts
 x = np.arange(3)
 width = 0.25
-
-# Firing rates
 rates_h = [metrics_h['firing_rates'][p] for p in populations]
 rates_pd = [metrics_pd['firing_rates'][p] for p in populations]
 rates_dbs = [metrics_dbs['firing_rates'][p] for p in populations]
+axes[0, 1].bar(x - width, rates_h, width, label='Healthy', color='steelblue', edgecolor='black')
+axes[0, 1].bar(x, rates_pd, width, label='PD (OFF)', color='firebrick', edgecolor='black')
+axes[0, 1].bar(x + width, rates_dbs, width, label='PD + DBS', color='forestgreen', edgecolor='black')
+axes[0, 1].set_ylabel('Firing Rate (Hz)')
+axes[0, 1].set_xticks(x)
+axes[0, 1].set_xticklabels(['STN', 'GPe', 'GPi'])
+axes[0, 1].legend(fontsize=8)
+axes[0, 1].set_title('A. Firing Rates')
 
-axes[1, 0].bar(x - width, rates_h, width, label='Healthy', color='steelblue', edgecolor='black')
-axes[1, 0].bar(x, rates_pd, width, label='PD (OFF)', color='firebrick', edgecolor='black')
-axes[1, 0].bar(x + width, rates_dbs, width, label='PD + DBS', color='forestgreen', edgecolor='black')
-axes[1, 0].set_ylabel('Firing Rate (Hz)')
-axes[1, 0].set_xticks(x)
-axes[1, 0].set_xticklabels(['STN', 'GPe', 'GPi'])
-axes[1, 0].legend(fontsize=8)
-axes[1, 0].set_title('A. Firing Rates')
-
-# STN Beta (primary metric)
+# Panel [1,0]: STN beta bars
 stn_betas = [beta_h['stn']*100, beta_pd['stn']*100, beta_dbs['stn']*100]
 bar_colors = ['steelblue', 'firebrick', 'forestgreen']
 bar_labels = ['Healthy', 'PD (OFF)', 'PD + DBS']
 x_beta = np.arange(3)
-
-axes[1, 1].bar(x_beta, stn_betas, 0.5, color=bar_colors, edgecolor='black')
-axes[1, 1].set_ylabel('STN Beta Power (%)')
-axes[1, 1].set_xticks(x_beta)
-axes[1, 1].set_xticklabels(bar_labels, fontsize=9)
-axes[1, 1].set_title('B. STN Beta Band Power')
+axes[1, 0].bar(x_beta, stn_betas, 0.5, color=bar_colors, edgecolor='black')
+axes[1, 0].set_ylabel('STN Beta Power (%)')
+axes[1, 0].set_xticks(x_beta)
+axes[1, 0].set_xticklabels(bar_labels, fontsize=9)
+axes[1, 0].set_title('B. STN Beta Band Power')
 for i, v in enumerate(stn_betas):
-    axes[1, 1].text(i, v + 0.3, f'{v:.1f}%', ha='center', fontsize=9)
+    axes[1, 0].text(i, v + 0.3, f'{v:.1f}%', ha='center', fontsize=9)
 
-# Summary text
-axes[1, 2].axis('off')
+# Panel [1,1]: interpretation text
+axes[1, 1].axis('off')
 summary_text = (
-    f"DBS MECHANISM (Informational Lesion)\n\n"
-    f"DBS Parameters:\n"
+    f"DBS SANITY CHECK\n(informational-lesion form)\n\n"
+    f"Intervention:\n"
     f"  ISTN: {pd_params['ISTN']:.0f} -> {pd_dbs_params['ISTN']:.0f}\n"
     f"  g_gpe_stn_mult: {pd_params['g_gpe_stn_mult']:.3f} -> {pd_dbs_params['g_gpe_stn_mult']:.3f}\n\n"
     f"Key Results (STN beta):\n"
@@ -298,11 +285,14 @@ if beta_pd['stn'] > 0:
     summary_text += f"  Suppression: {suppression:.0f}%\n"
 summary_text += (
     f"\nInterpretation:\n"
-    f"  DBS disrupts pathological synchrony\n"
-    f"  in the STN-GPe feedback loop."
+    f"  Modeled intervention (raised STN drive +\n"
+    f"  reduced GPe->STN coupling) abolishes beta\n"
+    f"  in the fitted PD network. Demonstrates the\n"
+    f"  modeled knob works; it is NOT a validation\n"
+    f"  of clinical DBS mechanism."
 )
-axes[1, 2].text(0.1, 0.9, summary_text, transform=axes[1, 2].transAxes,
-                fontsize=10, verticalalignment='top', fontfamily='monospace',
+axes[1, 1].text(0.05, 0.95, summary_text, transform=axes[1, 1].transAxes,
+                fontsize=9, verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
 plt.tight_layout()

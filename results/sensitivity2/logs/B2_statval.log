@@ -1,0 +1,83 @@
+JAX devices: [CudaDevice(id=0)]
+
+Running 10 seeds for statistical validation...
+Network: 10000/20000/15000 (45000 neurons)
+============================================================
+
+Seed 1/10...
+  Healthy: STN=26.2Hz, STN Beta=0.4%
+  PD:      STN=31.2Hz, STN Beta=49.5%
+  Time: 47.6s
+
+Seed 2/10...
+  Healthy: STN=26.5Hz, STN Beta=0.3%
+  PD:      STN=31.2Hz, STN Beta=49.5%
+  Time: 45.7s
+
+Seed 3/10...
+  Healthy: STN=26.3Hz, STN Beta=0.3%
+  PD:      STN=31.2Hz, STN Beta=49.5%
+  Time: 45.7s
+
+Seed 4/10...
+  Healthy: STN=26.3Hz, STN Beta=0.3%
+  PD:      STN=31.2Hz, STN Beta=49.3%
+  Time: 45.8s
+
+Seed 5/10...
+  Healthy: STN=26.2Hz, STN Beta=0.4%
+  PD:      STN=31.2Hz, STN Beta=49.1%
+  Time: 45.7s
+
+Seed 6/10...
+  Healthy: STN=26.2Hz, STN Beta=0.4%
+  PD:      STN=31.2Hz, STN Beta=49.4%
+  Time: 45.9s
+
+Seed 7/10...
+  Healthy: STN=26.3Hz, STN Beta=0.4%
+  PD:      STN=31.2Hz, STN Beta=49.3%
+  Time: 46.5s
+
+Seed 8/10...
+  Healthy: STN=26.1Hz, STN Beta=0.3%
+  PD:      STN=31.2Hz, STN Beta=49.0%
+  Time: 46.0s
+
+Seed 9/10...
+  Healthy: STN=26.3Hz, STN Beta=0.4%
+  PD:      STN=31.2Hz, STN Beta=49.0%
+  Time: 45.8s
+
+Seed 10/10...
+  Healthy: STN=26.1Hz, STN Beta=0.5%
+  PD:      STN=31.2Hz, STN Beta=49.4%
+  Time: 46.1s
+
+Total time: 28.5 minutes
+
+======================================================================
+STATISTICAL RESULTS (n=10)
+======================================================================
+Metric                   Healthy     Parkinsonian       p-value
+----------------------------------------------------------------------
+STN Rate (Hz)      26.26 +/- 0.11      31.22 +/- 0.01    p=0.0000 ***
+GPe Rate (Hz)      62.32 +/- 0.01      47.11 +/- 0.01    p=0.0000 ***
+GPi Rate (Hz)      82.25 +/- 0.04      71.47 +/- 0.04    p=0.0000 ***
+----------------------------------------------------------------------
+STN CV              0.21 +/- 0.00       0.13 +/- 0.00    p=0.0000 ***
+GPe CV              0.09 +/- 0.00       0.23 +/- 0.00    p=0.0000 ***
+GPi CV              0.19 +/- 0.00       0.31 +/- 0.00    p=0.0000 ***
+----------------------------------------------------------------------
+>>> PRIMARY BETA METRIC (STN):
+STN Beta (%)        0.37 +/- 0.05      49.31 +/- 0.20    p=0.0000 ***
+    (supplementary):
+GPe Beta (%)        0.00 +/- 0.00       4.90 +/- 14.71   p=0.3434 ns
+GPi Beta (%)        0.00 +/- 0.00       0.00 +/- 0.00    p=nan ns
+
+Significance: *** p<0.001, ** p<0.01, * p<0.05, ns = not significant
+
+Saved: results/figures/fig6_statistical_validation.png/pdf
+Saved: results/validation/statistical_validation.pkl
+
+Statistical validation complete!
