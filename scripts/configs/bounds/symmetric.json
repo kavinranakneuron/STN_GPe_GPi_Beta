@@ -1,0 +1,6 @@
+{
+    "g_stn_gpe_mult": [0.5, 5.0],
+    "g_gpe_stn_mult": [0.1, 2.0],
+    "g_stn_gpi_mult": [0.5, 4.0],
+    "g_gpe_gpi_mult": [0.2, 2.0]
+}

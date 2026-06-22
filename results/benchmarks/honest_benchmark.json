@@ -1,0 +1,84 @@
+{
+  "runs": [
+    {
+      "meta": {
+        "date": "2026-05-28T14:34:33.763735",
+        "mode": "gpu",
+        "devices": [
+          "cuda:0"
+        ],
+        "platform": "Linux-6.8.0-1054-gcp-x86_64-with-glibc2.35",
+        "jax_version": "0.6.2",
+        "cpu_count": 8,
+        "dt_ms": 0.025,
+        "sim_ms": 600.0,
+        "n_steps": 24000,
+        "size": [
+          100,
+          200,
+          150
+        ]
+      },
+      "results": [
+        {
+          "scenario": "JAX GPU (JIT+scan)",
+          "measured_steps": 24000,
+          "measured_ms": 600.0,
+          "compile_s": 5.608599424362183,
+          "run_times_s": [
+            1.4236335754394531,
+            1.424222707748413,
+            1.4192993640899658
+          ],
+          "median_s": 1.4236335754394531,
+          "extrapolated": false
+        },
+        {
+          "scenario": "JAX GPU (no-jit Python loop)",
+          "measured_steps": 24000,
+          "measured_ms": 600.0,
+          "run_times_s": [
+            1047.085688829422
+          ],
+          "median_s": 1047.085688829422,
+          "extrapolated": false
+        }
+      ]
+    },
+    {
+      "meta": {
+        "date": "2026-05-28T14:35:04.311122",
+        "mode": "cpu",
+        "devices": [
+          "TFRT_CPU_0"
+        ],
+        "platform": "Linux-6.8.0-1054-gcp-x86_64-with-glibc2.35",
+        "jax_version": "0.6.2",
+        "cpu_count": 8,
+        "dt_ms": 0.025,
+        "sim_ms": 600.0,
+        "n_steps": 24000,
+        "size": [
+          100,
+          200,
+          150
+        ]
+      },
+      "results": [
+        {
+          "scenario": "JAX CPU (JIT+scan)",
+          "measured_steps": 24000,
+          "measured_ms": 600.0,
+          "compile_s": 4.763039827346802,
+          "run_times_s": [
+            3.180251359939575,
+            3.2188847064971924,
+            3.1783125400543213
+          ],
+          "median_s": 3.180251359939575,
+          "extrapolated": false
+        }
+      ]
+    }
+  ]
+}

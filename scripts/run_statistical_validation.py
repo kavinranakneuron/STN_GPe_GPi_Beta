@@ -156,7 +156,7 @@ def print_stats(name, healthy_vals, pd_vals):
     pd_mean, pd_std = np.mean(pd_vals), np.std(pd_vals)
 
     from scipy import stats
-    t_stat, p_val = stats.ttest_ind(healthy_vals, pd_vals)
+    t_stat, p_val = stats.ttest_ind(healthy_vals, pd_vals, equal_var=False)
     sig = "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns"
 
     print(f"{name:<15} {h_mean:>8.2f} +/- {h_std:<6.2f} {pd_mean:>8.2f} +/- {pd_std:<6.2f}  p={p_val:.4f} {sig}")
@@ -265,7 +265,7 @@ axes[2].set_title('C. STN Beta Band Power (13-30 Hz)', fontweight='bold')
 
 # Add significance annotation
 from scipy import stats
-_, p_beta = stats.ttest_ind(results['healthy']['stn_beta'], results['pd']['stn_beta'])
+_, p_beta = stats.ttest_ind(results['healthy']['stn_beta'], results['pd']['stn_beta'], equal_var=False)
 sig_str = "***" if p_beta < 0.001 else "**" if p_beta < 0.01 else "*" if p_beta < 0.05 else "ns"
 y_max = max(h_stn_beta_mean + h_stn_beta_err, pd_stn_beta_mean + pd_stn_beta_err)
 axes[2].plot([-width/2, width/2], [y_max + 1, y_max + 1], 'k-', lw=1.5)

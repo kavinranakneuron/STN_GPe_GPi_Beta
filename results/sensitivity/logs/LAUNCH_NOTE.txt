@@ -1,0 +1,23 @@
+Launched: 2026-05-28 00:48:03 (VM local time)
+Expected completion: 2026-05-28 ~12:48 (~12 hours later; smoke run suggests it may finish faster)
+tmux session: sensitivity   (attach with: tmux attach -t sensitivity)
+Conditions: 2 bounds + 5 weights + 5 seeds = 12 runs x 1000 trials each
+Checkout: ~/jne-revision/submitted at submission-jne-110355 (a14f845)
+Driver: scripts/sweep_driver.py (factored from run_parkinsonian_optimization.py; hidden penalties retained)
+Master log: results/sensitivity/logs/master.log
+Per-run logs: results/sensitivity/logs/<sweep>_<condition>.log
+Morning summary: results/sensitivity/logs/SUMMARY.txt (written by summarize_sweeps.py after last run)
+
+Pre-launch checklist (all 8 passed before launch):
+  [1] git log: a14f845 Update observables.py
+  [2] jax devices: [CudaDevice(id=0)]
+  [3] sweep_driver smoke pickle: results/sensitivity/logs/smoke.pkl (5 trials, best loss 4.39)
+  [4] run_all_sweeps.sh: executable, 12 sweep invocations, summary call appended
+  [5] scripts/configs/bounds/symmetric.json: parses
+  [6] scripts/configs/weights/{paper,low_beta,high_beta,equal_weights,no_cv}.json: all 5 parse
+  [7] scripts/run_parkinsonian_optimization.py: smoke-test edit reverted (empty git diff)
+  [8] nvidia-smi: L4 idle (0 MiB, 0%, no processes) before launch
+
+Notes:
+- set -e is on: a single sweep failure halts the chain.
+- Smoke at 1 s/trial post-JIT suggests each 1000-trial run is ~17-20 min plus per-run JIT warm-up; full chain likely finishes well under the 12 hr budget.

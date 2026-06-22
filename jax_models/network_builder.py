@@ -46,7 +46,8 @@ G_STN_GPI = 0.2
 G_GPE_GPI = 0.3
 
 
-def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
+def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42, het_sigma=0.0,
+                        ou_tau_ms=5.0):
     """
     Build network with fixed-indegree connectivity.
 
@@ -56,16 +57,36 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
         n_gpi: Number of GPi neurons
         dt_ms: Timestep in ms
         seed: Random seed
+        het_sigma: Per-neuron conductance heterogeneity (fractional std). When
+            0.0 (default) the homogeneous submitted-tag path is used unchanged.
+            When >0, per-neuron conductances are drawn as g*(1+het_sigma*N(0,1))
+            and the vectorized step functions are swapped for het-aware variants.
     """
 
     # Neurons
     stn_state = create_stn_population(n_stn, heterogeneity=0.05, seed=seed)
     gpe_state = create_hh_population(n_gpe, cell_type='gpe', heterogeneity=0.1, seed=seed+1)
     gpi_state = create_hh_population(n_gpi, cell_type='gpi', heterogeneity=0.1, seed=seed+2)
+    stn_step_fn = create_vectorized_stn(compile=True)
     gpe_step_fn = create_vectorized_gpe_gpi(compile=True)
     gpi_step_fn = create_vectorized_gpe_gpi(compile=True)
     gpe_params = default_gpe_params()
     gpi_params = default_gpi_params()
+
+    # Opt-in per-neuron conductance heterogeneity. Default het_sigma=0.0 skips
+    # this entirely, leaving the homogeneous path byte-identical.
+    if het_sigma and het_sigma > 0.0:
+        from .het_support import (make_het_conductances, make_het_stn_step,
+                                  make_het_hh_step, STN_HET_KEYS, HH_HET_KEYS)
+        stn_conds = make_het_conductances(default_stn_params(), STN_HET_KEYS,
+                                          n_stn, het_sigma, seed + 1000)
+        gpe_conds = make_het_conductances(gpe_params, HH_HET_KEYS,
+                                          n_gpe, het_sigma, seed + 1001)
+        gpi_conds = make_het_conductances(gpi_params, HH_HET_KEYS,
+                                          n_gpi, het_sigma, seed + 1002)
+        stn_step_fn = make_het_stn_step(stn_conds, compile=True)
+        gpe_step_fn = make_het_hh_step(gpe_conds, compile=True)
+        gpi_step_fn = make_het_hh_step(gpi_conds, compile=True)
 
     # ==========================================================================
     # SYNAPSES (fixed indegree, no conductance scaling)
@@ -84,9 +105,9 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
     syn_state_gpe_gpi = init_synapse_state(syn_cfg_gpe_gpi)
 
     # Noise
-    noise_cfg_stn, noise_state_stn = create_ou_for_population(n_stn, dt_ms, mu=1.8, seed=seed+20)
-    noise_cfg_gpe, noise_state_gpe = create_ou_for_population(n_gpe, dt_ms, mu=0.0, seed=seed+21)
-    noise_cfg_gpi, noise_state_gpi = create_ou_for_population(n_gpi, dt_ms, mu=0.0, seed=seed+22)
+    noise_cfg_stn, noise_state_stn = create_ou_for_population(n_stn, dt_ms, tau_ms=ou_tau_ms, mu=1.8, seed=seed+20)
+    noise_cfg_gpe, noise_state_gpe = create_ou_for_population(n_gpe, dt_ms, tau_ms=ou_tau_ms, mu=0.0, seed=seed+21)
+    noise_cfg_gpi, noise_state_gpi = create_ou_for_population(n_gpi, dt_ms, tau_ms=ou_tau_ms, mu=0.0, seed=seed+22)
 
     state = {
         'stn': stn_state,
@@ -123,7 +144,7 @@ def build_network_state(n_stn, n_gpe, n_gpi, dt_ms, seed=42):
             'gpi': noise_cfg_gpi
         },
         'neuron_step_fns': {
-            'stn': create_vectorized_stn(compile=True),
+            'stn': stn_step_fn,
             'gpe': gpe_step_fn,
             'gpi': gpi_step_fn
         },

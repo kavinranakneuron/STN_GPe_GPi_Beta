@@ -1,4 +1,3 @@
 __pycache__/
 *.pyc
-*.pyo
-results/simulations/traces_*.pkl
+*.bak

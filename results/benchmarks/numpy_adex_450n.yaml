@@ -1,0 +1,14 @@
+# NumPy/AdEx baseline override config for honest benchmark (scenario 4).
+# Sized to match JAX scenarios: 100 STN / 200 GPe / 150 GPi = 450 neurons.
+# Model is AdEx (GPe/GPi) + light-HH (STN) -- DIFFERENT from the JAX HH+RT model.
+# Only overrides keys; everything else uses defaults from run_loop.py.
+seed: 42
+dt_ms: 0.025
+n_stn: 100
+n_gpe: 200
+n_gpi: 150
+t_total_s: 0.6
+burn_in_s: 0.0
+record_subset_stn: 10
+record_subset_gpe: 10
+record_subset_gpi: 10

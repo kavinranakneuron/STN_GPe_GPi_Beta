@@ -1,0 +1,11 @@
+Source: results/sensitivity2/healthy_seeds/healthy_seed42.pkl
+Best loss: 0.27247421206587963
+Best metrics: STN=20.999998092651367 GPe=60.43333053588867 GPi=77.5333251953125 betaGPe=0.0044877054169774055
+Targets: {'rate_stn': 20.0, 'rate_gpe': 70.0, 'rate_gpi': 80.0, 'cv_stn': 0.4, 'cv_gpe': 0.35, 'cv_gpi': 0.2}
+
+n trials with metrics: 489
+Trials with r_stn in [18,22]: 31
+  best loss among those: 0.2725
+  headline best loss:    0.2725
+  feasible (rates near targets, beta_gpe<0.05): 1
+Saved: results/sensitivity2/healthy_miss_analysis.png

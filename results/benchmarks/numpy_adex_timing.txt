@@ -1,0 +1,26 @@
+SUMMARY (one-line): NumPy/AdEx baseline -- 450 neurons (100 STN / 200 GPe / 150 GPi), 600 ms biological time (24000 steps @ dt=0.025 ms), wall clock 57.97 s end-to-end (54.54 s in the integration loop per manifest). Model = AdEx (GPe/GPi) + light-HH (STN); NOT the same model as the JAX HH+RT scenarios -- not a comparable speedup baseline. No extrapolation; full 600 ms measured.
+
+Machine: g2-standard-8 (8 vCPU Intel Cascade Lake, 1x NVIDIA L4). NumPy run is CPU-only (single-threaded ~102% CPU). seed=42, burn_in_s=0.
+
+----------------------------------------------------------------------
+Raw /usr/bin/time -v output (and run_loop.py stdout) from the measurement:
+----------------------------------------------------------------------
+
+Run complete: run_20260528_143517
+   Saved to: /tmp/numpy_adex_run
+   Figures: raster.png, psd.png
+   Arrays:  V_stn.npy, V_gpe.npy, V_gpi.npy, spikes_stn.npy, spikes_gpe.npy, spikes_gpi.npy
+	Command being timed: "python -m numpy_baseline.sim.run_loop --config results/benchmarks/numpy_adex_450n.yaml --paths /nonexistent.yaml --seconds 0.6 --burnin 0.0 --out /tmp/numpy_adex_run"
+	User time (seconds): 59.47
+	System time (seconds): 0.17
+	Percent of CPU this job got: 102%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:57.97
+	Maximum resident set size (kbytes): 185988
+	Voluntary context switches: 19
+	Involuntary context switches: 372
+	Exit status: 0
+
+Integration-loop elapsed_s from manifest.json: 54.5367 s (this excludes Python startup, imports, and saving arrays/figures).
+
+Config file used: results/benchmarks/numpy_adex_450n.yaml
+Manifest:        /tmp/numpy_adex_run/manifest.json (n_stn=100, n_gpe=200, n_gpi=150, T_steps=24000, dt_ms=0.025)

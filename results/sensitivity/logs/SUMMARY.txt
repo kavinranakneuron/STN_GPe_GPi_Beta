@@ -1,0 +1,48 @@
+========================================================================================================================
+SENSITIVITY SWEEP SUMMARY
+========================================================================================================================
+
+--- BOUNDS ---
+  paper                 loss=0.234  STN= 30.2Hz  GPe= 46.0Hz  GPi= 88.7Hz  betaGPe=38.9%  betaSTN=50.0%  | STN->GPe=3.90  GPe->STN=0.17  STN->GPi=2.58  GPe->GPi=0.90
+  symmetric             loss=0.092  STN= 27.8Hz  GPe= 38.4Hz  GPi= 84.3Hz  betaGPe=27.9%  betaSTN=50.0%  | STN->GPe=4.22  GPe->STN=1.57  STN->GPi=2.98  GPe->GPi=1.48
+
+--- WEIGHTS ---
+  equal_weights         loss=0.415  STN= 30.6Hz  GPe= 44.6Hz  GPi= 82.4Hz  betaGPe=23.8%  betaSTN=38.2%  | STN->GPe=3.36  GPe->STN=0.12  STN->GPi=2.39  GPe->GPi=0.88
+  high_beta             loss=0.598  STN= 30.9Hz  GPe= 37.5Hz  GPi=104.3Hz  betaGPe=20.4%  betaSTN=37.6%  | STN->GPe=1.75  GPe->STN=0.23  STN->GPi=3.19  GPe->GPi=0.69
+  low_beta              loss=0.138  STN= 28.9Hz  GPe= 41.5Hz  GPi= 82.4Hz  betaGPe=40.0%  betaSTN=61.3%  | STN->GPe=3.29  GPe->STN=0.17  STN->GPi=3.83  GPe->GPi=0.80
+  no_cv                 loss=0.002  STN= 28.0Hz  GPe= 42.6Hz  GPi= 82.4Hz  betaGPe=38.2%  betaSTN=60.4%  | STN->GPe=2.45  GPe->STN=0.19  STN->GPi=1.25  GPe->GPi=1.00
+  paper                 loss=0.119  STN= 27.8Hz  GPe= 42.5Hz  GPi= 83.4Hz  betaGPe=38.9%  betaSTN=67.6%  | STN->GPe=2.04  GPe->STN=0.18  STN->GPi=1.58  GPe->GPi=0.78
+
+--- SEEDS ---
+  seed1                 loss=0.125  STN= 29.0Hz  GPe= 42.3Hz  GPi= 82.6Hz  betaGPe=39.7%  betaSTN=64.1%  | STN->GPe=2.72  GPe->STN=0.17  STN->GPi=3.54  GPe->GPi=1.04
+  seed123               loss=0.125  STN= 28.4Hz  GPe= 41.3Hz  GPi= 81.6Hz  betaGPe=38.9%  betaSTN=65.1%  | STN->GPe=3.98  GPe->STN=0.18  STN->GPi=1.41  GPe->GPi=0.89
+  seed2024              loss=0.124  STN= 28.9Hz  GPe= 42.4Hz  GPi= 82.8Hz  betaGPe=38.4%  betaSTN=61.9%  | STN->GPe=3.35  GPe->STN=0.18  STN->GPi=2.50  GPe->GPi=0.33
+  seed42                loss=0.137  STN= 29.5Hz  GPe= 42.6Hz  GPi= 81.4Hz  betaGPe=40.1%  betaSTN=61.9%  | STN->GPe=4.63  GPe->STN=0.16  STN->GPi=2.21  GPe->GPi=1.03
+  seed7                 loss=0.393  STN= 33.3Hz  GPe= 37.8Hz  GPi= 83.8Hz  betaGPe=20.4%  betaSTN=11.9%  | STN->GPe=1.97  GPe->STN=0.69  STN->GPi=3.68  GPe->GPi=0.83
+
+========================================================================================================================
+HEADLINE COMPARISONS
+========================================================================================================================
+
+Paper baseline synaptic multipliers (from bounds/paper.pkl):
+  STN->GPe: 3.899  (paper reports 4.13 / 1.87 = 2.21)
+  GPe->STN: 0.175  (paper reports 0.11 / 0.99 = 0.11)
+  STN->GPi: 2.578
+  GPe->GPi: 0.897
+
+BOUNDS sweep -- does asymmetric pattern survive symmetric bounds?
+  Paper:     STN->GPe=3.90  GPe->STN=0.17
+  Symmetric: STN->GPe=4.22  GPe->STN=1.57
+  ==> If STN->GPe > 1 and GPe->STN < 1 under symmetric bounds,
+      the pattern is data-driven, not bound-driven.
+
+SEEDS sweep -- variance across 5 CMA-ES seeds:
+  g_stn_gpe_mult        mean=3.330  sd=1.039  range=[1.973, 4.629]
+  g_gpe_stn_mult        mean=0.275  sd=0.233  range=[0.156, 0.691]
+  g_stn_gpi_mult        mean=2.669  sd=0.949  range=[1.410, 3.682]
+  g_gpe_gpi_mult        mean=0.822  sd=0.292  range=[0.325, 1.041]
+  final_loss            mean=0.181  sd=0.119  range=[0.124, 0.393]
+
+========================================================================================================================
+Summary complete. Review results/sensitivity/logs/master.log for run-level timing.
+========================================================================================================================

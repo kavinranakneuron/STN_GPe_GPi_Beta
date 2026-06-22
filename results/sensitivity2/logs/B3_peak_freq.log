@@ -1,0 +1,7 @@
+Simulating healthy...
+  healthy fig pipeline: peak=30.00 Hz, resolution=2.00 Hz
+  healthy met pipeline: peak=14.65 Hz, resolution=4.88 Hz
+Simulating pd...
+  pd fig pipeline: peak=30.00 Hz, resolution=2.00 Hz
+  pd met pipeline: peak=29.30 Hz, resolution=4.88 Hz
+Saved: results/sensitivity2/peak_frequencies.json

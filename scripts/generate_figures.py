@@ -95,6 +95,31 @@ PD_MULTS = {
     'gpe_gpi': pd_params['g_gpe_gpi_mult'],
 }
 
+# Revision: load multiplier median (range) across the 5-seed sweeps so the
+# network schematic shows seed-robustness, not just a single-seed point estimate.
+def load_seed_multipliers(pattern):
+    import glob
+    keymap = {'stn_gpe': 'g_stn_gpe_mult', 'gpe_stn': 'g_gpe_stn_mult',
+              'stn_gpi': 'g_stn_gpi_mult', 'gpe_gpi': 'g_gpe_gpi_mult'}
+    acc = {k: [] for k in keymap}
+    for f in sorted(glob.glob(pattern)):
+        try:
+            d = pickle.load(open(f, 'rb'))
+            p = d['best_params']
+            for k, pk in keymap.items():
+                acc[k].append(float(p[pk]))
+        except Exception:
+            continue
+    if not any(acc.values()):
+        return None
+    return {k: (float(np.median(v)), float(min(v)), float(max(v)))
+            for k, v in acc.items() if v}
+
+PD_SEED_RANGES = load_seed_multipliers('results/sensitivity/seeds/seed*.pkl')
+H_SEED_RANGES = load_seed_multipliers('results/sensitivity2/healthy_seeds/healthy_seed*.pkl')
+print(f"Seed-sweep multipliers: PD={'loaded' if PD_SEED_RANGES else 'MISSING'}, "
+      f"Healthy={'loaded' if H_SEED_RANGES else 'MISSING'}")
+
 # ---------------------------------------------------------------------------
 # EXTRACT FIGURE DATA (subsampled numpy) BEFORE DELETING OBS
 # ---------------------------------------------------------------------------
@@ -113,20 +138,16 @@ def extract_figure_data(obs, dt_ms, burn_steps, n_stn, n_gpe, n_gpi):
         sub_idx = np.linspace(0, n_n - 1, min(MAX_NEURONS_RASTER, n_n), dtype=int)
         data[f'spikes_{pop}'] = np.array(obs[f'spikes_{pop}'][burn_steps:][:, sub_idx])
 
-        # LFP from subsampled voltage (500 neurons)
+        # LFP from full population (revision: unified with the metric pipeline
+        # used for the headline beta-fraction numbers, so the PSD shape and the
+        # reported beta % are computed identically -- see FIGURE_INVENTORY).
         V = obs[f'V_{pop}'][burn_steps:]
-        n_neurons = V.shape[1]
-        if n_neurons > MAX_NEURONS_PSD:
-            rng = np.random.default_rng(0)
-            v_idx = rng.choice(n_neurons, size=MAX_NEURONS_PSD, replace=False)
-            v_idx.sort()
-            V = V[:, v_idx]
         lfp = np.array(jnp.mean(V, axis=1))
         data[f'lfp_{pop}'] = lfp
 
-        # PSD from LFP
+        # PSD from LFP (nperseg=8192 to match compute_beta_fraction_all)
         fs = 1000.0 / dt_ms
-        nperseg = min(len(lfp), int(fs * 0.5))
+        nperseg = min(len(lfp), 8192)
         freqs, psd_arr = welch(lfp, fs=fs, nperseg=nperseg, noverlap=nperseg // 2)
         data[f'psd_{pop}'] = (freqs, psd_arr)
 
@@ -165,6 +186,19 @@ print(f"\nHealthy: STN={metrics_h['firing_rates']['stn']:.1f} GPe={metrics_h['fi
       f"GPi={metrics_h['firing_rates']['gpi']:.1f} STN beta={beta_h['stn']*100:.1f}%")
 print(f"PD:      STN={metrics_pd['firing_rates']['stn']:.1f} GPe={metrics_pd['firing_rates']['gpe']:.1f} "
       f"GPi={metrics_pd['firing_rates']['gpi']:.1f} STN beta={beta_pd['stn']*100:.1f}%")
+
+# Peak STN PSD frequency in the beta band (revision: report measured peak for
+# manuscript caption; PSD now uses the unified full-population / nperseg=8192
+# pipeline above).
+def _beta_peak(data):
+    f, p = data['psd_stn']
+    m = (f >= 13) & (f <= 30)
+    if not np.any(m):
+        return float('nan')
+    return float(f[m][np.argmax(p[m])])
+peak_h = _beta_peak(data_h)
+peak_pd = _beta_peak(data_pd)
+print(f"Peak STN PSD frequency: PD={peak_pd:.1f} Hz, Healthy={peak_h:.1f} Hz")
 
 print("\nGenerating figures...")
 
@@ -239,29 +273,24 @@ print("  Fig 1: Raster plots")
 # FIGURE 2: Power Spectra — STN primary, GPe/GPi also shown
 # =============================================================================
 
-fig2, axes = plt.subplots(1, 3, figsize=(14, 4))
-psd_labels = ['STN (primary)', 'GPe', 'GPi']
-
-for col, (pop, label) in enumerate(zip(populations, psd_labels)):
-    freqs_h, psd_h_pop = data_h[f'psd_{pop}']
-    freqs_pd, psd_pd_pop = data_pd[f'psd_{pop}']
-    mask = freqs_h <= 60
-
-    axes[col].semilogy(freqs_h[mask], psd_h_pop[mask], color=HEALTHY_COLOR, linewidth=1.5, label='Healthy')
-    axes[col].semilogy(freqs_pd[mask], psd_pd_pop[mask], color=PD_COLOR, linewidth=1.5, label='PD')
-    axes[col].axvspan(13, 30, alpha=0.15, color=BETA_BAND_COLOR, label='Beta band')
-    axes[col].set_xlabel('Frequency (Hz)')
-    axes[col].set_ylabel('Power (mV^2/Hz)')
-    axes[col].set_title(f'{label}  (beta: {beta_h[pop]*100:.1f}% -> {beta_pd[pop]*100:.1f}%)')
-    axes[col].legend(fontsize=8)
-    axes[col].set_xlim(0, 60)
-    axes[col].grid(True, alpha=0.2)
-
+fig2, ax = plt.subplots(figsize=(6, 4.5))
+freqs_h, psd_h_stn = data_h['psd_stn']
+freqs_pd, psd_pd_stn = data_pd['psd_stn']
+mask = freqs_h <= 60
+ax.semilogy(freqs_h[mask], psd_h_stn[mask], color=HEALTHY_COLOR, linewidth=1.5, label='Healthy')
+ax.semilogy(freqs_pd[mask], psd_pd_stn[mask], color=PD_COLOR, linewidth=1.5, label='PD')
+ax.axvspan(13, 30, alpha=0.15, color=BETA_BAND_COLOR, label='Beta band')
+ax.set_xlabel('Frequency (Hz)')
+ax.set_ylabel('Power (mV^2/Hz)')
+ax.set_title(f'STN power spectrum  (beta: {beta_h["stn"]*100:.1f}% -> {beta_pd["stn"]*100:.1f}%)')
+ax.legend(fontsize=9)
+ax.set_xlim(0, 60)
+ax.grid(True, alpha=0.2)
 plt.tight_layout()
 plt.savefig('results/figures/fig2_power_spectra.png', dpi=300, bbox_inches='tight')
 plt.savefig('results/figures/fig2_power_spectra.pdf', bbox_inches='tight')
 plt.close()
-print("  Fig 2: Power spectra")
+print("  Fig 2: STN power spectrum")
 
 # =============================================================================
 # FIGURE 3: Firing Rates + STN Beta Bar Charts
@@ -313,7 +342,7 @@ print("  Fig 3: Firing rates + STN beta")
 
 fig4, axes = plt.subplots(1, 2, figsize=(13, 6))
 
-def draw_network(ax, title, mults, highlight_key=None):
+def draw_network(ax, title, mults, highlight_key=None, ranges=None):
     ax.set_xlim(-2.5, 2.5)
     ax.set_ylim(-2.2, 2.2)
     ax.set_aspect('equal')
@@ -363,16 +392,25 @@ def draw_network(ax, title, mults, highlight_key=None):
 
         fontweight = 'bold' if key == highlight_key else 'normal'
         bbox_color = '#FFFF99' if key == highlight_key else 'white'
-        ax.text(mid_x + perp_x * 3, mid_y + perp_y * 3, f'{mult:.2f}x',
-                fontsize=10, ha='center', va='center', fontweight=fontweight,
+        if ranges and key in ranges:
+            med, lo, hi = ranges[key]
+            label = f'{med:.2f}x\n({lo:.2f}-{hi:.2f})'
+        else:
+            label = f'{mult:.2f}x'
+        ax.text(mid_x + perp_x * 3, mid_y + perp_y * 3, label,
+                fontsize=9, ha='center', va='center', fontweight=fontweight,
                 bbox=dict(boxstyle='round,pad=0.3', facecolor=bbox_color, edgecolor='gray', alpha=0.9))
 
     ax.plot([], [], color='#2CA02C', linewidth=3, label='Excitatory')
     ax.plot([], [], color='#D62728', linewidth=3, label='Inhibitory')
     ax.legend(loc='lower center', fontsize=9, ncol=2)
 
-draw_network(axes[0], 'A. Healthy', HEALTHY_MULTS)
-draw_network(axes[1], 'B. Parkinsonian', PD_MULTS, highlight_key='gpe_stn')
+draw_network(axes[0], 'A. Healthy', HEALTHY_MULTS, ranges=H_SEED_RANGES)
+draw_network(axes[1], 'B. Parkinsonian', PD_MULTS, highlight_key='gpe_stn', ranges=PD_SEED_RANGES)
+if PD_SEED_RANGES or H_SEED_RANGES:
+    fig4.text(0.5, 0.02,
+        'Edge labels: median (min-max) of fitted multiplier across 5 optimization seeds.',
+        ha='center', va='bottom', fontsize=8, style='italic')
 
 # PD/Healthy ratios annotation
 ratios = {
@@ -593,41 +631,50 @@ except FileNotFoundError:
 # =============================================================================
 
 try:
-    with open('results/benchmarks/performance_table.pkl', 'rb') as f:
-        perf = pickle.load(f)
+    import json as _json
+    with open('results/benchmarks/honest_benchmark.json') as f:
+        hb = _json.load(f)
+    scen = {}
+    for run in hb['runs']:
+        for r in run['results']:
+            scen[r['scenario']] = r['median_s']
+    t_gpu_jit = scen['JAX GPU (JIT+scan)']
+    t_gpu_nojit = scen['JAX GPU (no-jit Python loop)']
+    t_cpu_jit = scen['JAX CPU (JIT+scan)']
+    t_numpy = 57.97  # results/benchmarks/numpy_adex_timing.txt (different model; reference only)
+    jit_speedup = t_gpu_nojit / t_gpu_jit
+    gpu_speedup = t_cpu_jit / t_gpu_jit
 
-    fig_s3, ax = plt.subplots(figsize=(9, 5))
+    labels = ['JAX GPU\n(no-JIT loop)', 'JAX CPU\n(JIT)', 'JAX GPU\n(JIT)', 'NumPy/AdEx\n(diff. model)']
+    vals = [t_gpu_nojit, t_cpu_jit, t_gpu_jit, t_numpy]
+    colors = ['#B2182B', '#2166AC', '#2166AC', '#999999']
 
-    jax_results_valid = [r for r in perf['jax_results'] if 'error' not in r]
-    jax_neurons = [r['n_total'] for r in jax_results_valid]
-    jax_times = [r['median_s'] for r in jax_results_valid]
-    numpy_time = perf['numpy_baseline']['extrapolated_time_s']
-    numpy_neurons = perf['numpy_baseline']['n_total']
-
-    ax.bar([0], [numpy_time], width=0.5, color='#999999', edgecolor='black', label=f'NumPy ({numpy_neurons}n)')
-    for i, (n, t) in enumerate(zip(jax_neurons, jax_times)):
-        ax.bar([i + 1], [t], width=0.5, color='#2166AC', edgecolor='black',
-               label=f'JAX ({n}n)')
-        ax.text(i + 1, t + max(jax_times)*0.03, f'{t:.1f}s', ha='center', fontsize=9)
-
-    ax.text(0, numpy_time + max(jax_times)*0.03, f'{numpy_time:.0f}s', ha='center', fontsize=9)
-    ax.set_ylabel('Wall Time (seconds)')
-    if jax_times:
-        speedup_450 = numpy_time / jax_times[0]
-        ax.set_title(f'Supplementary: Performance -- {speedup_450:.0f}x Speedup (JAX vs NumPy at {numpy_neurons}n)')
-    else:
-        ax.set_title('Supplementary: Performance')
-    ax.set_xticks(range(len(jax_neurons) + 1))
-    ax.set_xticklabels([f'NumPy\n{numpy_neurons}n'] + [f'JAX\n{n}n' for n in jax_neurons])
+    fig_s3, ax = plt.subplots(figsize=(8, 5))
+    bars = ax.bar(range(4), vals, width=0.6, color=colors, edgecolor='black', linewidth=0.6)
+    bars[3].set_hatch('//')
+    ax.set_yscale('log')
+    ax.set_ylabel('Wall-clock time, 450 neurons x 600 ms (s)')
+    ax.set_xticks(range(4))
+    ax.set_xticklabels(labels)
+    for k, v in enumerate(vals):
+        ax.text(k, v * 1.18, (f'{v:.2f}s' if v < 10 else f'{v:.0f}s'), ha='center', va='bottom', fontsize=9)
+    ax.set_title('Supplementary: Same-model JIT acceleration and GPU-vs-CPU\n'
+                 f'(JIT+fusion {jit_speedup:.0f}x; GPU/CPU {gpu_speedup:.1f}x; same HH+RT model)',
+                 fontsize=11)
+    ax.text(0.98, 0.97,
+            f'JIT+fusion (no-JIT -> JIT, same GPU/model): {jit_speedup:.0f}x\n'
+            f'GPU vs CPU (compiled model): {gpu_speedup:.1f}x\n'
+            'NumPy/AdEx: different model, reference only',
+            transform=ax.transAxes, ha='right', va='top', fontsize=8,
+            bbox=dict(boxstyle='round', facecolor='#F5F5F5', edgecolor='#CCCCCC'))
     ax.grid(True, alpha=0.2, axis='y')
-
     plt.tight_layout()
     plt.savefig('results/figures/supp_performance.png', dpi=300, bbox_inches='tight')
     plt.savefig('results/figures/supp_performance.pdf', bbox_inches='tight')
     plt.close()
-    print("  Supp: Performance scaling")
+    print(f"  Supp: Performance (honest) -- JIT {jit_speedup:.0f}x, GPU/CPU {gpu_speedup:.1f}x")
 except FileNotFoundError:
-    print("  Supp: Performance scaling SKIPPED (file not found)")
+    print("  Supp: Performance SKIPPED (honest_benchmark.json not found)")
 
 # =============================================================================
 # DONE
