@@ -1,6 +1,6 @@
 # GPU-Accelerated Basal Ganglia Network Model for Parkinson's Disease
 
-**Author:** Kavineshvar Ranak Nakkeeran  
+**Author:** Kavineshvar Ranak  
 **Affiliation:** Functional Neurosurgery Lab, Johns Hopkins University  
 **Date:** February 2026
 
