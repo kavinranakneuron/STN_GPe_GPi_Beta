@@ -260,4 +260,4 @@ gcloud compute instances stop cbgtc-hh --zone=us-central1-c
 
 ## AI Assistance Disclosure
 
-Generative AI tools (Claude, Anthropic) were used to assist with code documentation, manuscript formatting, and readability improvements. All computational model design, simulation execution, data analysis, and scientific interpretation were performed by the authors. No AI tools were used to generate simulations, run experiments, or produce scientific conclusions.
+Generative AI tools were used to assist with code documentation, manuscript formatting, and readability improvements. All computational model design, simulation execution, data analysis, and scientific interpretation were performed by the authors. No AI tools were used to generate simulations, run experiments, or produce scientific conclusions.
